@@ -10,6 +10,7 @@ import {
     formatDate,
 } from "@/lib/lawnLogic";
 import { fetchWeather, getWeatherAdvice } from "@/lib/weather";
+import { useGeolocation } from "@/hooks/useGeolocation";
 import {
     CheckCircle2,
     Circle,
@@ -36,12 +37,14 @@ export function DashboardPage() {
     const lawnState = getLawnState(TODAY);
     const { task: nextTask, isUrgent, daysUntil } = getNextStep(TODAY);
     const tip = getQuickTip(TODAY);
+    const { location, loading: locationLoading } = useGeolocation();
 
-    // Fetch weather data
+    // Fetch weather data using user's location
     const { data: weather, isLoading: weatherLoading } = useQuery({
-        queryKey: ["weather"],
-        queryFn: () => fetchWeather(),
+        queryKey: ["weather", location?.lat, location?.lon],
+        queryFn: () => fetchWeather(location?.lat, location?.lon),
         staleTime: 1000 * 60 * 30, // 30 mins
+        enabled: !locationLoading, // wait until we have coordinates
     });
 
     const weatherAdvice = weather ? getWeatherAdvice(weather) : null;
