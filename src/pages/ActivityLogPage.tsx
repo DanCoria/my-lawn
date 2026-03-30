@@ -288,8 +288,8 @@ export function ActivityLogPage() {
                 {/* Activity History */}
                 <div>
                     <div className="flex items-center justify-between px-1 mb-3">
-                        <p className="section-title mb-0">History</p>
-                        <div className="flex gap-1.5">
+                        <p className="section-title mb-0 pr-2">History</p>
+                        <div className="flex gap-1.5 overflow-x-auto pb-1">
                             <button
                                 id="filter-all-btn"
                                 onClick={() => setFilter("all")}
