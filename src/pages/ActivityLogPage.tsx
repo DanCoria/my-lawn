@@ -1,9 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
+import { useLawnProfile } from "@/contexts/LawnProfileContext";
 import { BottomNav } from "@/components/BottomNav";
 import { Activity, ActivityType } from "@/types/database";
+import { getActivityTypes, getGrassTypeInfo } from "@/lib/lawnLogic";
 import {
     Scissors,
     Droplets,
@@ -17,15 +19,6 @@ import {
     Trash2,
 } from "lucide-react";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isSameDay } from "date-fns";
-
-const ACTIVITY_TYPES: { value: ActivityType; label: string }[] = [
-    { value: "mow", label: "Mow" },
-    { value: "scalp", label: "Scalp" },
-    { value: "fertilize", label: "Fertilize" },
-    { value: "pre-emergent", label: "Pre-Emergent" },
-    { value: "water", label: "Water" },
-    { value: "aerate", label: "Aerate" },
-];
 
 const ACTIVITY_CONFIG: Record<
     ActivityType,
@@ -41,15 +34,28 @@ const ACTIVITY_CONFIG: Record<
 
 export function ActivityLogPage() {
     const { user } = useAuth();
+    const { grassType } = useLawnProfile();
+    const grassInfo = getGrassTypeInfo(grassType);
     const queryClient = useQueryClient();
 
-    const [type, setType] = useState<ActivityType>("mow");
+    // Derive available activity types for the user's grass type
+    const activityTypes = getActivityTypes(grassType);
+
+    const [type, setType] = useState<ActivityType>(activityTypes[0].value);
     const [date, setDate] = useState(format(new Date(), "yyyy-MM-dd"));
     const [notes, setNotes] = useState("");
     const [filter, setFilter] = useState<ActivityType | "all">("all");
     const [calendarDate, setCalendarDate] = useState(new Date());
     const [showForm, setShowForm] = useState(true);
     const [formError, setFormError] = useState<string | null>(null);
+
+    // If the grass type changes and the currently selected type is no longer valid,
+    // reset to the first valid option.
+    useEffect(() => {
+        if (!activityTypes.find((t) => t.value === type)) {
+            setType(activityTypes[0].value);
+        }
+    }, [grassType]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const { data: activities = [], isLoading } = useQuery({
         queryKey: ["activities", user?.id],
@@ -120,7 +126,9 @@ export function ActivityLogPage() {
             {/* Header */}
             <div className="bg-lawn-green-700 px-5 pt-12 pb-5">
                 <h1 className="text-white text-2xl font-bold">Activity Log</h1>
-                <p className="text-lawn-green-200 text-sm mt-0.5">Record and review your lawn work</p>
+                <p className="text-lawn-green-200 text-sm mt-0.5">
+                    {grassInfo.emoji} {grassInfo.name} lawn activity tracker
+                </p>
             </div>
 
             <div className="px-4 py-5 space-y-5 page-content">
@@ -141,7 +149,7 @@ export function ActivityLogPage() {
                             <div>
                                 <p className="section-title">Activity Type</p>
                                 <div className="grid grid-cols-3 gap-2">
-                                    {ACTIVITY_TYPES.map(({ value, label }) => {
+                                    {activityTypes.map(({ value, label }) => {
                                         const cfg = ACTIVITY_CONFIG[value];
                                         const Icon = cfg.icon;
                                         const selected = type === value;
@@ -275,7 +283,7 @@ export function ActivityLogPage() {
 
                         {/* Legend */}
                         <div className="mt-4 pt-3 border-t border-gray-100 flex flex-wrap gap-3">
-                            {ACTIVITY_TYPES.map(({ value, label }) => (
+                            {activityTypes.map(({ value, label }) => (
                                 <div key={value} className="flex items-center gap-1.5">
                                     <div className={`w-2 h-2 rounded-full ${ACTIVITY_CONFIG[value].dot}`} />
                                     <span className="text-xs text-gray-500">{label}</span>
@@ -287,6 +295,7 @@ export function ActivityLogPage() {
 
                 {/* Activity History */}
                 <div>
+                    {/* Filter Chips */}
                     <div className="flex items-center justify-between px-1 mb-3">
                         <p className="section-title mb-0 pr-2">History</p>
                         <div className="flex gap-1.5 overflow-x-auto pb-1">
@@ -298,7 +307,7 @@ export function ActivityLogPage() {
                             >
                                 All
                             </button>
-                            {ACTIVITY_TYPES.map(({ value, label }) => (
+                            {activityTypes.map(({ value, label }) => (
                                 <button
                                     key={value}
                                     id={`filter-${value}-btn`}

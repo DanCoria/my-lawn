@@ -1,12 +1,14 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
+import { useGrassType } from "@/contexts/LawnProfileContext";
 import { BottomNav } from "@/components/BottomNav";
 import {
     getLawnState,
     getNextStep,
     getQuickTip,
-    SCHEDULE_TASKS,
+    getScheduleTasks,
+    getGrassTypeInfo,
     formatDate,
 } from "@/lib/lawnLogic";
 import { fetchWeather, getWeatherAdvice } from "@/lib/weather";
@@ -16,7 +18,6 @@ import {
     Circle,
     Scissors,
     Lightbulb,
-    LogOut,
     Cloud,
     Wind,
     Sun,
@@ -32,11 +33,14 @@ import {
 const TODAY = new Date();
 
 export function DashboardPage() {
-    const { user, signOut } = useAuth();
+    const { user } = useAuth();
+    const grassType = useGrassType();
+    const grassInfo = getGrassTypeInfo(grassType);
     const queryClient = useQueryClient();
-    const lawnState = getLawnState(TODAY);
-    const { task: nextTask, isUrgent, daysUntil } = getNextStep(TODAY);
-    const tip = getQuickTip(TODAY);
+    const lawnState = getLawnState(TODAY, grassType);
+    const scheduleTasks = getScheduleTasks(grassType);
+    const { task: nextTask, isUrgent, daysUntil } = getNextStep(TODAY, grassType);
+    const tip = getQuickTip(TODAY, grassType);
     const { location, loading: locationLoading } = useGeolocation();
 
     // Fetch weather data using user's location
@@ -126,13 +130,11 @@ export function DashboardPage() {
                             {user?.email}
                         </p>
                     </div>
-                    <button
-                        id="signout-btn"
-                        onClick={signOut}
-                        className="p-2 rounded-full bg-lawn-green-600 text-lawn-green-200 hover:bg-lawn-green-500 transition-colors"
-                    >
-                        <LogOut size={18} />
-                    </button>
+                    {/* Grass type badge */}
+                    <div className="flex items-center gap-1.5 bg-white/15 backdrop-blur-sm rounded-xl px-3 py-1.5">
+                        <span className="text-base">{grassInfo.emoji}</span>
+                        <span className="text-white text-xs font-semibold">{grassInfo.name}</span>
+                    </div>
                 </div>
 
                 {/* Lawn State Badge */}
@@ -302,9 +304,9 @@ export function DashboardPage() {
 
                 {/* Action Checklist */}
                 <div>
-                    <p className="section-title px-1">2026 Season Checklist</p>
+                    <p className="section-title px-1">2026 {grassInfo.name} Season Checklist</p>
                     <div className="card overflow-hidden">
-                        {SCHEDULE_TASKS.map((task, idx) => {
+                        {scheduleTasks.map((task, idx) => {
                             const done = completions.includes(task.key);
                             const isActive = TODAY >= task.startDate && TODAY <= task.endDate;
                             return (
@@ -314,7 +316,7 @@ export function DashboardPage() {
                                     onClick={() => toggleTask.mutate({ key: task.key, completed: done })}
                                     className={`w-full flex items-center gap-4 px-4 py-4 text-left transition-colors
                     hover:bg-gray-50 active:bg-gray-100
-                    ${idx < SCHEDULE_TASKS.length - 1 ? "border-b border-gray-100" : ""}
+                    ${idx < scheduleTasks.length - 1 ? "border-b border-gray-100" : ""}
                     ${done ? "opacity-60" : ""}
                   `}
                                 >
@@ -346,7 +348,7 @@ export function DashboardPage() {
                 <div className="card p-4 flex items-start gap-3 bg-amber-50 border-amber-100">
                     <Lightbulb className="text-amber-500 flex-shrink-0 mt-0.5" size={20} />
                     <div>
-                        <p className="text-xs font-bold text-amber-600 uppercase tracking-wide mb-1">Quick Tip</p>
+                        <p className="text-xs font-bold text-amber-600 uppercase tracking-wide mb-1">{grassInfo.name} Tip</p>
                         <p className="text-sm text-amber-900">{tip}</p>
                     </div>
                 </div>

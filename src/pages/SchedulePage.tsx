@@ -1,8 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
+import { useGrassType } from "@/contexts/LawnProfileContext";
 import { BottomNav } from "@/components/BottomNav";
-import { SCHEDULE_TASKS, formatDate } from "@/lib/lawnLogic";
+import { getScheduleTasks, getGrassTypeInfo, getFertilizationNote, formatDate } from "@/lib/lawnLogic";
 import { CheckCircle2 } from "lucide-react";
 
 const YEAR = 2026;
@@ -19,6 +20,10 @@ const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "S
 
 export function SchedulePage() {
     const { user } = useAuth();
+    const grassType = useGrassType();
+    const grassInfo = getGrassTypeInfo(grassType);
+    const scheduleTasks = getScheduleTasks(grassType);
+    const fertNote = getFertilizationNote(grassType);
 
     const { data: completions = [] } = useQuery({
         queryKey: ["task-completions", user?.id],
@@ -38,7 +43,9 @@ export function SchedulePage() {
             {/* Header */}
             <div className="bg-lawn-green-700 px-5 pt-12 pb-5">
                 <h1 className="text-white text-2xl font-bold">2026 Season Schedule</h1>
-                <p className="text-lawn-green-200 text-sm mt-0.5">Bermuda grass — Southern US calendar</p>
+                <p className="text-lawn-green-200 text-sm mt-0.5">
+                    {grassInfo.emoji} {grassInfo.name} — {grassInfo.season === "warm" ? "warm" : "cool"}-season calendar
+                </p>
             </div>
 
             <div className="px-4 py-5 space-y-6 page-content">
@@ -62,7 +69,7 @@ export function SchedulePage() {
 
                         {/* Timeline bars */}
                         <div className="relative space-y-2.5 min-w-[280px]">
-                            {SCHEDULE_TASKS.map((task) => {
+                            {scheduleTasks.map((task) => {
                                 const startPct = toPercent(task.startDate);
                                 const endPct = toPercent(task.endDate);
                                 const widthPct = endPct - startPct;
@@ -118,7 +125,7 @@ export function SchedulePage() {
                 <div>
                     <p className="section-title px-1">Task Windows</p>
                     <div className="space-y-3">
-                        {SCHEDULE_TASKS.map((task) => {
+                        {scheduleTasks.map((task) => {
                             const done = completions.includes(task.key);
                             const isActive = TODAY >= task.startDate && TODAY <= task.endDate;
                             const isPast = TODAY > task.endDate;
@@ -163,11 +170,9 @@ export function SchedulePage() {
 
                 {/* Fertilization schedule note */}
                 <div className="card p-4 bg-blue-50 border-blue-100">
-                    <p className="text-xs font-bold text-blue-700 uppercase tracking-wide mb-2">📋 Fertilization Schedule</p>
+                    <p className="text-xs font-bold text-blue-700 uppercase tracking-wide mb-2">{fertNote.title}</p>
                     <p className="text-xs text-blue-800 leading-relaxed">
-                        Bermuda grass grows best with a 4-6 week fertilization cycle during active growth (May–September).
-                        Start ~2 weeks after the Spring Scalp and continue until 6 weeks before first frost.
-                        Use a balanced NPK in spring, higher nitrogen mid-summer, and a winterizer (low N, high K) in fall.
+                        {fertNote.text}
                     </p>
                 </div>
             </div>

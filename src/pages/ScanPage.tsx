@@ -2,8 +2,10 @@ import { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
+import { useGrassType } from "@/contexts/LawnProfileContext";
 import { BottomNav } from "@/components/BottomNav";
 import { diagnoseLawn, resizeImageForAI, generateThumbnail, Diagnosis } from "@/lib/gemini";
+import { getGrassTypeInfo } from "@/lib/lawnLogic";
 import { LawnScan } from "@/types/database";
 import {
     Camera,
@@ -190,6 +192,8 @@ function ScanHistoryItem({ scan, onDelete }: { scan: LawnScan; onDelete: (id: st
 
 export function ScanPage() {
     const { user } = useAuth();
+    const grassType = useGrassType();
+    const grassInfo = getGrassTypeInfo(grassType);
     const queryClient = useQueryClient();
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -245,7 +249,7 @@ export function ScanPage() {
             const thumbnail = await generateThumbnail(selectedFile);
 
             // 3. Call Gemini Vision
-            const diagnosis = await diagnoseLawn(base64, mimeType, TODAY);
+            const diagnosis = await diagnoseLawn(base64, mimeType, TODAY, grassType);
 
             // 4. Save to lawn_scans table with thumbnail as image_url
             const { error: insertError } = await supabase.from("lawn_scans").insert({
@@ -280,7 +284,7 @@ export function ScanPage() {
                     <Sparkles size={22} /> Scan Lawn
                 </h1>
                 <p className="text-lawn-green-200 text-sm mt-0.5">
-                    AI-powered lawn diagnosis from a photo
+                    AI-powered {grassInfo.name} lawn diagnosis
                 </p>
             </div>
 

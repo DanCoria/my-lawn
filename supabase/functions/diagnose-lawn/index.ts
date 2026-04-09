@@ -13,7 +13,21 @@ serve(async (req) => {
     }
 
     try {
-        const { image, mimeType, dateStr } = await req.json();
+        const { image, mimeType, dateStr, grassType } = await req.json();
+
+        // Map grass type ID to display name
+        const grassNames: Record<string, string> = {
+            "bermuda": "Bermuda",
+            "st-augustine": "St. Augustine",
+            "zoysia": "Zoysia",
+            "centipede": "Centipede",
+            "bahia": "Bahia",
+            "kentucky-bluegrass": "Kentucky Bluegrass",
+            "tall-fescue": "Tall Fescue",
+            "perennial-ryegrass": "Perennial Ryegrass",
+            "fine-fescue": "Fine Fescue",
+        };
+        const grassName = grassNames[grassType] || "Bermuda";
 
         if (!image || !mimeType) {
             return new Response(
@@ -40,7 +54,7 @@ serve(async (req) => {
         const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
         const systemPrompt = `
-You are an expert Bermuda grass lawn care specialist analyzing a photo of a residential lawn.
+You are an expert ${grassName} grass lawn care specialist analyzing a photo of a residential lawn.
 Today's date is ${dateStr}.
 
 Analyze the image provided and return a JSON diagnosis with this exact structure:
@@ -66,10 +80,11 @@ Analyze the image provided and return a JSON diagnosis with this exact structure
 }
 
 Context clues to use in your analysis:
-- This is a Bermuda grass lawn in the Southern US
-- If the grass appears brown/tan in winter months (Nov–Feb), that is NORMAL dormancy, not dead grass
+- This is a ${grassName} grass lawn
+- If the grass appears brown/tan during its normal dormancy season, that is NORMAL dormancy, not dead grass
 - Look carefully for: weeds (broadleaf vs grassy), bare spots, discoloration, disease patterns, thatch
 - Be specific with product suggestions (e.g., "Prodiamine 65 WDG", "Scotts Turf Builder", "Spectracide Weed Stop")
+- Tailor your recommendations specifically for ${grassName} grass care practices
 - If you cannot clearly see the lawn (too dark, blurry, wrong subject), say so in the summary and return condition_score: null
 
 Return ONLY valid JSON. No markdown, no explanation outside the JSON.

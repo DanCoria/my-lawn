@@ -48,7 +48,7 @@ export function LoginPage() {
                 <div className="text-7xl drop-shadow-xl">🌱</div>
                 <h1 className="text-3xl font-bold text-white tracking-tight">My Lawn</h1>
                 <p className="text-lawn-green-300 text-sm text-center max-w-xs">
-                    Your personal Bermuda grass management dashboard
+                    Your personal lawn care management dashboard
                 </p>
             </div>
 

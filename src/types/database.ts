@@ -32,3 +32,34 @@ export interface LawnScan {
     created_at: string;
 }
 
+// ── Grass types & user profiles ──────────────────────────────
+
+export type GrassType =
+    | "bermuda"
+    | "st-augustine"
+    | "zoysia"
+    | "centipede"
+    | "bahia"
+    | "kentucky-bluegrass"
+    | "tall-fescue"
+    | "perennial-ryegrass"
+    | "fine-fescue";
+
+export type GrassSeason = "warm" | "cool";
+
+export interface GrassTypeInfo {
+    id: GrassType;
+    name: string;
+    season: GrassSeason;
+    description: string;
+    emoji: string;
+}
+
+export interface UserProfile {
+    id: string;
+    grass_type: GrassType;
+    display_name: string | null;
+    onboarding_completed: boolean;
+    created_at: string;
+    updated_at: string;
+}

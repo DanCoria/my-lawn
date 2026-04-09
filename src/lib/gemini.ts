@@ -24,7 +24,8 @@ import { supabase } from "@/lib/supabase";
 export async function diagnoseLawn(
     imageBase64: string,
     mimeType: string,
-    date: Date
+    date: Date,
+    grassType: string = "bermuda"
 ): Promise<Diagnosis> {
     const dateStr = date.toLocaleDateString("en-US", {
         weekday: "long",
@@ -49,7 +50,7 @@ export async function diagnoseLawn(
             "Authorization": `Bearer ${accessToken}`,
             "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
         },
-        body: JSON.stringify({ image: imageBase64, mimeType, dateStr }),
+        body: JSON.stringify({ image: imageBase64, mimeType, dateStr, grassType }),
     });
 
     if (!response.ok) {
