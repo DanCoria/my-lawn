@@ -1,11 +1,12 @@
 import { NavLink } from "react-router-dom";
-import { LayoutDashboard, ClipboardList, CalendarDays, Sparkles } from "lucide-react";
+import { LayoutDashboard, ClipboardList, CalendarDays, Sparkles, User } from "lucide-react";
 
 const navItems = [
     { to: "/", icon: LayoutDashboard, label: "Dashboard", id: "nav-dashboard" },
-    { to: "/log", icon: ClipboardList, label: "Activity Log", id: "nav-log" },
+    { to: "/log", icon: ClipboardList, label: "Log", id: "nav-log" },
     { to: "/scan", icon: Sparkles, label: "Scan", id: "nav-scan" },
     { to: "/schedule", icon: CalendarDays, label: "Schedule", id: "nav-schedule" },
+    { to: "/profile", icon: User, label: "Profile", id: "nav-profile" },
 ];
 
 export function BottomNav() {
@@ -30,9 +31,9 @@ export function BottomNav() {
                             <>
                                 <div className={`p-1 rounded-xl transition-all duration-150 ${isActive ? "bg-lawn-green-50" : ""
                                     }`}>
-                                    <Icon size={22} strokeWidth={isActive ? 2.5 : 1.8} />
+                                    <Icon size={20} strokeWidth={isActive ? 2.5 : 1.8} />
                                 </div>
-                                <span className={`text-xs font-medium ${isActive ? "font-semibold" : ""}`}>
+                                <span className={`text-[10px] font-medium ${isActive ? "font-semibold" : ""}`}>
                                     {label}
                                 </span>
                             </>
