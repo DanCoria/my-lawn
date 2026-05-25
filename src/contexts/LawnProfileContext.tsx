@@ -16,7 +16,11 @@ interface LawnProfileContextType {
     loading: boolean;
     needsOnboarding: boolean;
     updateGrassType: (grassType: GrassType) => Promise<void>;
-    completeOnboarding: (grassType: GrassType) => Promise<void>;
+    completeOnboarding: (
+        grassType: GrassType,
+        location?: { lat: number; lon: number; zipCode: string; name: string } | null
+    ) => Promise<void>;
+    updateLocation: (lat: number, lon: number, zipCode: string, name: string) => Promise<void>;
     refreshProfile: () => Promise<void>;
 }
 
@@ -67,28 +71,42 @@ export function LawnProfileProvider({ children }: { children: ReactNode }) {
         }
     }, [authLoading, fetchProfile]);
 
-    const completeOnboarding = async (grassType: GrassType) => {
+    const completeOnboarding = async (
+        grassType: GrassType,
+        location?: { lat: number; lon: number; zipCode: string; name: string } | null
+    ) => {
         if (!user) throw new Error("Not authenticated");
 
-        // Try INSERT first (new user). If the row already exists, UPDATE instead.
-        // We avoid upsert because under RLS the conflict-update path can fail
-        // silently for new users who don't yet have a row.
+        const insertData = {
+            id: user.id,
+            grass_type: grassType,
+            onboarding_completed: true,
+            latitude: location?.lat ?? null,
+            longitude: location?.lon ?? null,
+            zip_code: location?.zipCode ?? null,
+            location_name: location?.name ?? null,
+        };
+
         let result = await supabase
             .from("user_profiles")
-            .insert({
-                id: user.id,
-                grass_type: grassType,
-                onboarding_completed: true,
-            })
+            .insert(insertData)
             .select()
             .single();
 
         if (result.error) {
             // Row already exists (e.g. user went back and re-submitted) — update instead
             if (result.error.code === "23505") {
+                const updateData = {
+                    grass_type: grassType,
+                    onboarding_completed: true,
+                    latitude: location?.lat ?? null,
+                    longitude: location?.lon ?? null,
+                    zip_code: location?.zipCode ?? null,
+                    location_name: location?.name ?? null,
+                };
                 result = await supabase
                     .from("user_profiles")
-                    .update({ grass_type: grassType, onboarding_completed: true })
+                    .update(updateData)
                     .eq("id", user.id)
                     .select()
                     .single();
@@ -108,6 +126,25 @@ export function LawnProfileProvider({ children }: { children: ReactNode }) {
         const { data, error } = await supabase
             .from("user_profiles")
             .update({ grass_type: grassType })
+            .eq("id", user.id)
+            .select()
+            .single();
+
+        if (error) throw error;
+        setProfile(data as UserProfile);
+    };
+
+    const updateLocation = async (lat: number, lon: number, zipCode: string, name: string) => {
+        if (!user || !profile) throw new Error("No profile to update");
+
+        const { data, error } = await supabase
+            .from("user_profiles")
+            .update({
+                latitude: lat,
+                longitude: lon,
+                zip_code: zipCode,
+                location_name: name,
+            })
             .eq("id", user.id)
             .select()
             .single();
@@ -140,6 +177,7 @@ export function LawnProfileProvider({ children }: { children: ReactNode }) {
                 needsOnboarding,
                 updateGrassType,
                 completeOnboarding,
+                updateLocation,
                 refreshProfile,
             }}
         >

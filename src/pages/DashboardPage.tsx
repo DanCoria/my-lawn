@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
-import { useGrassType } from "@/contexts/LawnProfileContext";
+import { useGrassType, useLawnProfile } from "@/contexts/LawnProfileContext";
 import { BottomNav } from "@/components/BottomNav";
 import {
     getLawnState,
@@ -41,15 +41,24 @@ export function DashboardPage() {
     const scheduleTasks = getScheduleTasks(grassType);
     const { task: nextTask, isUrgent, daysUntil } = getNextStep(TODAY, grassType);
     const tip = getQuickTip(TODAY, grassType);
-    const { location, loading: locationLoading } = useGeolocation();
+    const { profile, loading: profileLoading } = useLawnProfile();
+    const { location: geoLoc, loading: geoLoading } = useGeolocation();
+
+    const hasProfileCoords = profile?.latitude !== null && profile?.longitude !== null && profile?.latitude !== undefined && profile?.longitude !== undefined;
+    const lat = hasProfileCoords ? profile!.latitude! : geoLoc?.lat;
+    const lon = hasProfileCoords ? profile!.longitude! : geoLoc?.lon;
+
+    const locLoading = profileLoading || (hasProfileCoords ? false : geoLoading);
 
     // Fetch weather data using user's location
-    const { data: weather, isLoading: weatherLoading } = useQuery({
-        queryKey: ["weather", location?.lat, location?.lon],
-        queryFn: () => fetchWeather(location?.lat, location?.lon),
+    const { data: weather, isLoading: queryWeatherLoading } = useQuery({
+        queryKey: ["weather", lat, lon],
+        queryFn: () => fetchWeather(lat, lon),
         staleTime: 1000 * 60 * 30, // 30 mins
-        enabled: !locationLoading, // wait until we have coordinates
+        enabled: !profileLoading && (hasProfileCoords || (!geoLoading && lat !== undefined && lon !== undefined)),
     });
+
+    const weatherLoading = locLoading || queryWeatherLoading;
 
     const weatherAdvice = weather ? getWeatherAdvice(weather) : null;
 
@@ -152,9 +161,16 @@ export function DashboardPage() {
 
                 {/* Weather & Advice Card */}
                 <div className="card p-5">
-                    <div className="flex items-center gap-2 mb-4">
-                        <Cloud className="text-lawn-green-600" size={20} />
-                        <h2 className="font-bold text-gray-900">Weather & Advice</h2>
+                    <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-2">
+                            <Cloud className="text-lawn-green-600" size={20} />
+                            <h2 className="font-bold text-gray-900">Weather & Advice</h2>
+                        </div>
+                        {profile?.location_name && (
+                            <span className="text-xs text-gray-500 font-semibold bg-gray-50 border border-gray-100 px-2.5 py-1 rounded-lg">
+                                📍 {profile.location_name}
+                            </span>
+                        )}
                     </div>
 
                     {weatherLoading ? (

@@ -134,7 +134,7 @@ function DiagnosisResult({ diagnosis, imageUrl }: { diagnosis: Diagnosis; imageU
 function ScanHistoryItem({ scan, onDelete }: { scan: LawnScan; onDelete: (id: string) => void }) {
     const [expanded, setExpanded] = useState(false);
     const diagnosis = scan.diagnosis;
-    // image_url is now always a data URL thumbnail stored inline
+    // image_url can be a public storage URL or a legacy base64 data URL thumbnail
     const imgSrc = scan.image_url || null;
 
     return (
@@ -188,6 +188,16 @@ function ScanHistoryItem({ scan, onDelete }: { scan: LawnScan; onDelete: (id: st
             )}
         </div>
     );
+}
+
+function base64ToBlob(base64: string, mimeType: string): Blob {
+    const byteCharacters = atob(base64);
+    const byteNumbers = new Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    return new Blob([byteArray], { type: mimeType });
 }
 
 export function ScanPage() {
@@ -245,23 +255,43 @@ export function ScanPage() {
             const base64 = await resizeImageForAI(selectedFile);
             const mimeType = "image/jpeg"; // resizeImageForAI outputs JPEG
 
-            // 2. Generate a small thumbnail to store inline in DB (no Storage bucket needed)
-            const thumbnail = await generateThumbnail(selectedFile);
+            // 2. Convert base64 to Blob for storage upload
+            const blob = base64ToBlob(base64, mimeType);
 
-            // 3. Call Gemini Vision
+            // 3. Upload to Supabase Storage
+            const uuid = typeof crypto.randomUUID === "function"
+                ? crypto.randomUUID()
+                : Math.random().toString(36).substring(2) + Date.now().toString(36);
+            const filePath = `${user.id}/${uuid}.jpg`;
+
+            const { error: uploadError } = await supabase.storage
+                .from("lawn-scans")
+                .upload(filePath, blob, {
+                    contentType: mimeType,
+                    upsert: true,
+                });
+            if (uploadError) throw new Error(`Image upload failed: ${uploadError.message}`);
+
+            // 4. Retrieve public URL
+            const { data: publicUrlData } = supabase.storage
+                .from("lawn-scans")
+                .getPublicUrl(filePath);
+            const imageUrl = publicUrlData.publicUrl;
+
+            // 5. Call Gemini Vision
             const diagnosis = await diagnoseLawn(base64, mimeType, TODAY, grassType);
 
-            // 4. Save to lawn_scans table with thumbnail as image_url
+            // 6. Save to lawn_scans table with public storage URL as image_url
             const { error: insertError } = await supabase.from("lawn_scans").insert({
                 user_id: user.id,
-                image_url: thumbnail,
+                image_url: imageUrl,
                 diagnosis,
             });
             if (insertError) throw new Error(`Save failed: ${insertError.message}`);
 
-            // 5. Show result
+            // 7. Show result
             setCurrentDiagnosis(diagnosis);
-            setCurrentImageUrl(previewUrl ?? "");
+            setCurrentImageUrl(imageUrl);
             queryClient.invalidateQueries({ queryKey: ["lawn-scans"] });
 
             // Clear for next scan

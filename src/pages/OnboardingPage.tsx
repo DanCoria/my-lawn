@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useLawnProfile } from "@/contexts/LawnProfileContext";
 import { GRASS_TYPES, getGrassTypeInfo } from "@/lib/lawnLogic";
@@ -14,9 +14,11 @@ import {
     Leaf,
     Sun,
     Snowflake,
+    MapPin,
+    Search,
 } from "lucide-react";
 
-type Step = "welcome" | "select" | "confirm";
+type Step = "welcome" | "select" | "location" | "confirm";
 
 function GrassCard({
     grass,
@@ -89,6 +91,45 @@ export function OnboardingPage() {
     const [scanResult, setScanResult] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
+    // Location step state
+    const [detectingLocation, setDetectingLocation] = useState(false);
+    const [locationResolved, setLocationResolved] = useState(false);
+    const [locationName, setLocationName] = useState("");
+    const [coordinates, setCoordinates] = useState<{ lat: number; lon: number } | null>(null);
+    const [zipCode, setZipCode] = useState("");
+    const [searchQuery, setSearchQuery] = useState("");
+    const [searching, setSearching] = useState(false);
+    const [searchError, setSearchError] = useState<string | null>(null);
+    const [searchResults, setSearchResults] = useState<any[]>([]);
+
+    useEffect(() => {
+        const timeoutId = setTimeout(() => {
+            if (searchQuery.trim().length >= 3 && !locationResolved) {
+                const query = searchQuery.split(",")[0].trim();
+                setSearching(true);
+                setSearchError(null);
+                fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=5&language=en&format=json`)
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.results) {
+                            setSearchResults(data.results);
+                        } else {
+                            setSearchResults([]);
+                        }
+                    })
+                    .catch(err => {
+                        console.error("Autocomplete fetch error:", err);
+                    })
+                    .finally(() => {
+                        setSearching(false);
+                    });
+            } else {
+                setSearchResults([]);
+            }
+        }, 400);
+        return () => clearTimeout(timeoutId);
+    }, [searchQuery, locationResolved]);
+
     const handleScanPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
@@ -133,13 +174,93 @@ export function OnboardingPage() {
         }
     };
 
+    const handleGPSDetect = () => {
+        setDetectingLocation(true);
+        setSearchError(null);
+        if (!navigator.geolocation) {
+            setSearchError("Geolocation is not supported by your browser");
+            setDetectingLocation(false);
+            return;
+        }
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                const lat = Math.round(position.coords.latitude * 100) / 100;
+                const lon = Math.round(position.coords.longitude * 100) / 100;
+                setCoordinates({ lat, lon });
+                setLocationName(`GPS: ${lat}, ${lon}`);
+                setZipCode("");
+                setLocationResolved(true);
+                setDetectingLocation(false);
+            },
+            () => {
+                setSearchError("Could not access your location. Please enter a city or ZIP code manually.");
+                setDetectingLocation(false);
+            },
+            { enableHighAccuracy: false, timeout: 10000 }
+        );
+    };
+
+    const handleSelectResult = (result: any) => {
+        const lat = Math.round(result.latitude * 100) / 100;
+        const lon = Math.round(result.longitude * 100) / 100;
+        setCoordinates({ lat, lon });
+        
+        const nameParts = [result.name];
+        if (result.admin1) nameParts.push(result.admin1);
+        else if (result.country) nameParts.push(result.country);
+        
+        const fullName = nameParts.join(", ");
+        setLocationName(fullName);
+        setZipCode(result.postcodes?.[0] || (/\d{5}/.test(searchQuery) ? searchQuery.match(/\d{5}/)?.[0] || "" : ""));
+        setLocationResolved(true);
+        setSearchResults([]);
+        setSearchQuery(fullName);
+    };
+
+    const handleSearchLocation = async () => {
+        if (!searchQuery.trim()) return;
+        if (searchResults.length > 0) {
+            handleSelectResult(searchResults[0]);
+            return;
+        }
+        const query = searchQuery.split(",")[0].trim();
+        setSearching(true);
+        setSearchError(null);
+        try {
+            const res = await fetch(
+                `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(
+                    query
+                )}&count=1&language=en&format=json`
+            );
+            if (!res.ok) throw new Error("Search request failed");
+            const data = await res.json();
+            if (!data.results || data.results.length === 0) {
+                throw new Error("Location not found. Try another city or ZIP code.");
+            }
+            handleSelectResult(data.results[0]);
+        } catch (err) {
+            setSearchError(err instanceof Error ? err.message : "Search failed");
+            setLocationResolved(false);
+        } finally {
+            setSearching(false);
+        }
+    };
+
     const handleComplete = async () => {
         if (!selectedGrass) return;
         setSaving(true);
         setError(null);
 
         try {
-            await completeOnboarding(selectedGrass);
+            const locData = locationResolved && coordinates
+                ? { lat: coordinates.lat, lon: coordinates.lon, zipCode, name: locationName }
+                : null;
+            await completeOnboarding(selectedGrass, locData);
+            
+            if (locData) {
+                localStorage.setItem("my-lawn-location", JSON.stringify({ lat: locData.lat, lon: locData.lon }));
+            }
+            
             navigate("/", { replace: true });
         } catch (err) {
             setError(err instanceof Error ? err.message : "Something went wrong");
@@ -189,7 +310,7 @@ export function OnboardingPage() {
                         <div className="text-center mb-6 pt-4">
                             <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-full px-4 py-1.5 mb-4">
                                 <Leaf size={14} className="text-lawn-green-300" />
-                                <span className="text-lawn-green-200 text-xs font-medium">Step 1 of 1</span>
+                                <span className="text-lawn-green-200 text-xs font-medium">Step 1 of 2</span>
                             </div>
                             <h2 className="text-2xl font-bold text-white mb-2">
                                 What's your grass type?
@@ -280,13 +401,161 @@ export function OnboardingPage() {
                                 </button>
                                 <button
                                     id="onboarding-continue-btn"
-                                    onClick={() => selectedGrass && setStep("confirm")}
+                                    onClick={() => selectedGrass && setStep("location")}
                                     disabled={!selectedGrass}
                                     className={`flex-1 btn-primary flex items-center justify-center gap-2 py-4 rounded-2xl text-base
                                         ${!selectedGrass ? "opacity-40 cursor-not-allowed" : "shadow-xl shadow-lawn-green-900/50"}
                                     `}
                                 >
                                     Continue
+                                    <ChevronRight size={18} />
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* ─── Step: Location ─── */}
+                {step === "location" && (
+                    <div className="flex-1 flex flex-col animate-slide-up">
+                        {/* Header */}
+                        <div className="text-center mb-6 pt-4">
+                            <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-full px-4 py-1.5 mb-4">
+                                <MapPin size={14} className="text-lawn-green-300" />
+                                <span className="text-lawn-green-200 text-xs font-medium">Step 2 of 2</span>
+                            </div>
+                            <h2 className="text-2xl font-bold text-white mb-2">
+                                Where is your lawn?
+                            </h2>
+                            <p className="text-lawn-green-300 text-sm">
+                                We'll use your location to calculate soil temperature, local schedule windows, and weather updates.
+                            </p>
+                        </div>
+
+                        <div className="space-y-4 flex-1">
+                            {/* GPS Button */}
+                            <button
+                                id="onboarding-gps-btn"
+                                type="button"
+                                onClick={handleGPSDetect}
+                                disabled={detectingLocation || searching}
+                                className="w-full flex items-center justify-center gap-2.5 py-4 rounded-2xl bg-white text-lawn-green-800 text-sm font-bold shadow-md hover:bg-lawn-green-50 transition-all active:scale-[0.98] disabled:opacity-50"
+                            >
+                                {detectingLocation ? (
+                                    <>
+                                        <Loader2 size={16} className="animate-spin text-lawn-green-700" />
+                                        Accessing GPS...
+                                    </>
+                                ) : (
+                                    <>
+                                        <MapPin size={16} className="text-lawn-green-600" />
+                                        Use Current GPS Location
+                                    </>
+                                )}
+                            </button>
+
+                            <div className="flex items-center gap-3 my-4">
+                                <div className="h-px bg-lawn-green-800 flex-1 opacity-50" />
+                                <span className="text-xs text-lawn-green-400 font-bold uppercase tracking-wider">Or search manually</span>
+                                <div className="h-px bg-lawn-green-800 flex-1 opacity-50" />
+                            </div>
+
+                            {/* Manual Search Input */}
+                            <div className="space-y-2 relative">
+                                <div className="flex gap-2">
+                                    <input
+                                        id="location-search-input"
+                                        type="text"
+                                        value={searchQuery}
+                                        onChange={(e) => {
+                                            setSearchQuery(e.target.value);
+                                            if (locationResolved) setLocationResolved(false);
+                                        }}
+                                        onKeyDown={(e) => e.key === "Enter" && handleSearchLocation()}
+                                        placeholder="City name or ZIP code"
+                                        className="flex-1 px-4 py-3.5 bg-lawn-green-950/40 border border-lawn-green-800 rounded-xl text-white placeholder-lawn-green-400 focus:outline-none focus:ring-2 focus:ring-lawn-green-500 focus:border-transparent transition-all duration-150 text-sm"
+                                    />
+                                    <button
+                                        id="location-search-btn"
+                                        type="button"
+                                        onClick={handleSearchLocation}
+                                        disabled={searching || detectingLocation}
+                                        className="p-3.5 rounded-xl bg-lawn-green-700 text-white hover:bg-lawn-green-600 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center flex-shrink-0"
+                                    >
+                                        {searching ? (
+                                            <Loader2 size={18} className="animate-spin" />
+                                        ) : (
+                                            <Search size={18} />
+                                        )}
+                                    </button>
+                                </div>
+                                
+                                {/* Autocomplete Dropdown */}
+                                {searchResults.length > 0 && !locationResolved && (
+                                    <div className="absolute z-10 w-full mt-1 bg-white border border-lawn-green-200 rounded-xl shadow-xl overflow-hidden animate-slide-up text-left">
+                                        {searchResults.map((result) => {
+                                            const nameParts = [result.name];
+                                            if (result.admin1) nameParts.push(result.admin1);
+                                            else if (result.country) nameParts.push(result.country);
+                                            const fullName = nameParts.join(", ");
+                                            
+                                            return (
+                                                <button
+                                                    key={`${result.id}-${result.latitude}`}
+                                                    type="button"
+                                                    onClick={() => handleSelectResult(result)}
+                                                    className="w-full text-left px-4 py-3 text-sm text-gray-800 hover:bg-lawn-green-50 border-b border-gray-100 last:border-0 transition-colors flex items-center gap-2"
+                                                >
+                                                    <MapPin size={14} className="text-lawn-green-600 flex-shrink-0" />
+                                                    <span className="truncate">{fullName}</span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Search / GPS Errors */}
+                            {searchError && (
+                                <div className="p-3.5 rounded-xl bg-red-500/20 border border-red-500/30 backdrop-blur-sm">
+                                    <p className="text-red-200 text-xs text-center">{searchError}</p>
+                                </div>
+                            )}
+
+                            {/* Resolved Location Card */}
+                            {locationResolved && coordinates && (
+                                <div className="p-5 rounded-2xl bg-lawn-green-800/40 border border-lawn-green-500/40 backdrop-blur-sm animate-scale-in text-center shadow-lg">
+                                    <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-lawn-green-600 mb-3">
+                                        <Check size={20} className="text-white" strokeWidth={3} />
+                                    </div>
+                                    <h3 className="text-white font-bold text-base mb-1">Location Verified!</h3>
+                                    <p className="text-lawn-green-200 font-semibold text-sm">{locationName}</p>
+                                    <p className="text-lawn-green-300 text-xs mt-1">
+                                        Coordinates: {coordinates.lat.toFixed(2)}°, {coordinates.lon.toFixed(2)}°
+                                        {zipCode && ` · ZIP: ${zipCode}`}
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Bottom action bar */}
+                        <div className="fixed bottom-0 left-0 right-0 bg-gradient-to-t from-lawn-green-950 via-lawn-green-950/95 to-transparent pt-8 pb-8 px-5">
+                            <div className="max-w-md mx-auto flex gap-3">
+                                <button
+                                    id="onboarding-loc-back-btn"
+                                    onClick={() => setStep("select")}
+                                    className="p-3.5 rounded-xl bg-white/10 text-white hover:bg-white/20 transition-colors"
+                                >
+                                    <ChevronLeft size={20} />
+                                </button>
+                                <button
+                                    id="onboarding-loc-continue-btn"
+                                    onClick={() => {
+                                        setStep("confirm");
+                                    }}
+                                    className="flex-1 btn-primary flex items-center justify-center gap-2 py-4 rounded-2xl text-base shadow-xl shadow-lawn-green-900/50"
+                                >
+                                    {locationResolved ? "Continue" : "Skip Location"}
                                     <ChevronRight size={18} />
                                 </button>
                             </div>

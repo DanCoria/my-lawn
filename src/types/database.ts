@@ -60,6 +60,10 @@ export interface UserProfile {
     grass_type: GrassType;
     display_name: string | null;
     onboarding_completed: boolean;
+    latitude: number | null;
+    longitude: number | null;
+    zip_code: string | null;
+    location_name: string | null;
     created_at: string;
     updated_at: string;
 }
