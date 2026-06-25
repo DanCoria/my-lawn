@@ -4,7 +4,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import { useGrassType } from "@/contexts/LawnProfileContext";
 import { BottomNav } from "@/components/BottomNav";
-import { diagnoseLawn, resizeImageForAI, generateThumbnail, Diagnosis } from "@/lib/gemini";
+import { diagnoseLawn, resizeImageForAI, Diagnosis } from "@/lib/gemini";
 import { getGrassTypeInfo } from "@/lib/lawnLogic";
 import { LawnScan } from "@/types/database";
 import {
@@ -22,6 +22,11 @@ import {
 import { format } from "date-fns";
 
 const TODAY = new Date();
+const SIGNED_SCAN_URL_EXPIRES_IN_SECONDS = 60 * 60;
+
+type DisplayableLawnScan = LawnScan & {
+    signed_image_url?: string | null;
+};
 
 const SEVERITY_CONFIG = {
     low: { label: "Low", class: "bg-blue-100 text-blue-700" },
@@ -131,11 +136,11 @@ function DiagnosisResult({ diagnosis, imageUrl }: { diagnosis: Diagnosis; imageU
     );
 }
 
-function ScanHistoryItem({ scan, onDelete }: { scan: LawnScan; onDelete: (id: string) => void }) {
+function ScanHistoryItem({ scan, onDelete }: { scan: DisplayableLawnScan; onDelete: (scan: DisplayableLawnScan) => void }) {
     const [expanded, setExpanded] = useState(false);
     const diagnosis = scan.diagnosis;
-    // image_url can be a public storage URL or a legacy base64 data URL thumbnail
-    const imgSrc = scan.image_url || null;
+    // signed_image_url is used for private storage objects; image_url supports legacy public/base64 scans.
+    const imgSrc = scan.signed_image_url || scan.image_url || null;
 
     return (
         <div className="card overflow-hidden">
@@ -179,7 +184,7 @@ function ScanHistoryItem({ scan, onDelete }: { scan: LawnScan; onDelete: (id: st
                     )}
                     <DiagnosisResult diagnosis={diagnosis} imageUrl="" />
                     <button
-                        onClick={() => onDelete(scan.id)}
+                        onClick={() => onDelete(scan)}
                         className="flex items-center gap-1.5 text-xs text-red-400 hover:text-red-600 transition-colors mt-2"
                     >
                         <Trash2 size={13} /> Delete scan
@@ -223,13 +228,39 @@ export function ScanPage() {
                 .eq("user_id", user!.id)
                 .order("created_at", { ascending: false });
             if (error) throw error;
-            return (data ?? []) as LawnScan[];
+
+            const scans = (data ?? []) as LawnScan[];
+            return await Promise.all(
+                scans.map(async (scan): Promise<DisplayableLawnScan> => {
+                    if (!scan.storage_path) return scan;
+
+                    const { data: signedData, error: signedError } = await supabase.storage
+                        .from("lawn-scans")
+                        .createSignedUrl(scan.storage_path, SIGNED_SCAN_URL_EXPIRES_IN_SECONDS);
+
+                    if (signedError) {
+                        console.error("Failed to create signed scan image URL:", signedError);
+                        return scan;
+                    }
+
+                    return { ...scan, signed_image_url: signedData.signedUrl };
+                })
+            );
         },
+        enabled: !!user,
     });
 
     const deleteScan = useMutation({
-        mutationFn: async (id: string) => {
-            const { error } = await supabase.from("lawn_scans").delete().eq("id", id);
+        mutationFn: async (scan: DisplayableLawnScan) => {
+            if (scan.storage_path) {
+                const { error: removeError } = await supabase.storage
+                    .from("lawn-scans")
+                    .remove([scan.storage_path]);
+
+                if (removeError) throw removeError;
+            }
+
+            const { error } = await supabase.from("lawn_scans").delete().eq("id", scan.id);
             if (error) throw error;
         },
         onSuccess: () => queryClient.invalidateQueries({ queryKey: ["lawn-scans"] }),
@@ -250,19 +281,26 @@ export function ScanPage() {
         setError(null);
         setCurrentDiagnosis(null);
 
+        let uploadedPath: string | null = null;
+        let savedScan = false;
+
         try {
             // 1. Resize image for AI (limits payload size to avoid Edge Function errors)
             const base64 = await resizeImageForAI(selectedFile);
             const mimeType = "image/jpeg"; // resizeImageForAI outputs JPEG
 
-            // 2. Convert base64 to Blob for storage upload
+            // 2. Call Gemini Vision before uploading so failed analysis does not orphan storage files
+            const diagnosis = await diagnoseLawn(base64, mimeType, TODAY, grassType);
+
+            // 3. Convert base64 to Blob for storage upload
             const blob = base64ToBlob(base64, mimeType);
 
-            // 3. Upload to Supabase Storage
+            // 4. Upload to private Supabase Storage
             const uuid = typeof crypto.randomUUID === "function"
                 ? crypto.randomUUID()
                 : Math.random().toString(36).substring(2) + Date.now().toString(36);
             const filePath = `${user.id}/${uuid}.jpg`;
+            uploadedPath = filePath;
 
             const { error: uploadError } = await supabase.storage
                 .from("lawn-scans")
@@ -272,26 +310,25 @@ export function ScanPage() {
                 });
             if (uploadError) throw new Error(`Image upload failed: ${uploadError.message}`);
 
-            // 4. Retrieve public URL
-            const { data: publicUrlData } = supabase.storage
+            // 5. Create a short-lived signed URL for immediate display
+            const { data: signedUrlData, error: signedUrlError } = await supabase.storage
                 .from("lawn-scans")
-                .getPublicUrl(filePath);
-            const imageUrl = publicUrlData.publicUrl;
+                .createSignedUrl(filePath, SIGNED_SCAN_URL_EXPIRES_IN_SECONDS);
+            if (signedUrlError) throw new Error(`Image preview failed: ${signedUrlError.message}`);
 
-            // 5. Call Gemini Vision
-            const diagnosis = await diagnoseLawn(base64, mimeType, TODAY, grassType);
-
-            // 6. Save to lawn_scans table with public storage URL as image_url
+            // 6. Save to lawn_scans table with storage path; image_url remains populated for legacy compatibility
             const { error: insertError } = await supabase.from("lawn_scans").insert({
                 user_id: user.id,
-                image_url: imageUrl,
+                image_url: filePath,
+                storage_path: filePath,
                 diagnosis,
             });
             if (insertError) throw new Error(`Save failed: ${insertError.message}`);
+            savedScan = true;
 
             // 7. Show result
             setCurrentDiagnosis(diagnosis);
-            setCurrentImageUrl(imageUrl);
+            setCurrentImageUrl(signedUrlData.signedUrl);
             queryClient.invalidateQueries({ queryKey: ["lawn-scans"] });
 
             // Clear for next scan
@@ -299,6 +336,12 @@ export function ScanPage() {
             setPreviewUrl(null);
             if (fileInputRef.current) fileInputRef.current.value = "";
         } catch (err) {
+            if (uploadedPath && !savedScan) {
+                const { error: cleanupError } = await supabase.storage.from("lawn-scans").remove([uploadedPath]);
+                if (cleanupError) {
+                    console.error("Failed to clean up orphaned scan image:", cleanupError);
+                }
+            }
             setError(err instanceof Error ? err.message : "Something went wrong");
         } finally {
             setIsAnalyzing(false);
@@ -444,7 +487,7 @@ export function ScanPage() {
                                 <ScanHistoryItem
                                     key={scan.id}
                                     scan={scan}
-                                    onDelete={(id) => deleteScan.mutate(id)}
+                                    onDelete={(scan) => deleteScan.mutate(scan)}
                                 />
                             ))}
                         </div>
