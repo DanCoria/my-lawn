@@ -28,6 +28,7 @@ export interface LawnScan {
     id: string;
     user_id: string;
     image_url: string;
+    storage_path: string | null;
     diagnosis: import("@/lib/gemini").Diagnosis;
     created_at: string;
 }
