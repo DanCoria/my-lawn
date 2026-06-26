@@ -183,6 +183,7 @@ export interface ScheduleTask {
     color: string;
     bgColor: string;
     urgencyDays: number;
+    completionActivityTypes?: ActivityType[];
 }
 
 const YEAR = 2026;
@@ -199,6 +200,7 @@ const WARM_SEASON_TASKS: Record<string, ScheduleTask[]> = {
             color: "text-orange-700",
             bgColor: "bg-orange-500",
             urgencyDays: 21,
+            completionActivityTypes: ["pre-emergent"],
         },
         {
             key: "spring-scalp-2026",
@@ -209,6 +211,7 @@ const WARM_SEASON_TASKS: Record<string, ScheduleTask[]> = {
             color: "text-yellow-700",
             bgColor: "bg-yellow-500",
             urgencyDays: 14,
+            completionActivityTypes: ["scalp"],
         },
         {
             key: "first-fert-2026",
@@ -219,6 +222,7 @@ const WARM_SEASON_TASKS: Record<string, ScheduleTask[]> = {
             color: "text-blue-700",
             bgColor: "bg-blue-500",
             urgencyDays: 14,
+            completionActivityTypes: ["fertilize"],
         },
         {
             key: "aeration-2026",
@@ -229,6 +233,7 @@ const WARM_SEASON_TASKS: Record<string, ScheduleTask[]> = {
             color: "text-purple-700",
             bgColor: "bg-purple-500",
             urgencyDays: 14,
+            completionActivityTypes: ["aerate"],
         },
         {
             key: "second-fert-2026",
@@ -239,6 +244,7 @@ const WARM_SEASON_TASKS: Record<string, ScheduleTask[]> = {
             color: "text-blue-700",
             bgColor: "bg-blue-400",
             urgencyDays: 14,
+            completionActivityTypes: ["fertilize"],
         },
         {
             key: "third-fert-2026",
@@ -249,6 +255,7 @@ const WARM_SEASON_TASKS: Record<string, ScheduleTask[]> = {
             color: "text-blue-700",
             bgColor: "bg-blue-400",
             urgencyDays: 14,
+            completionActivityTypes: ["fertilize"],
         },
         {
             key: "fourth-fert-2026",
@@ -259,6 +266,7 @@ const WARM_SEASON_TASKS: Record<string, ScheduleTask[]> = {
             color: "text-blue-700",
             bgColor: "bg-blue-400",
             urgencyDays: 14,
+            completionActivityTypes: ["fertilize"],
         },
     ],
     "st-augustine": [
@@ -271,6 +279,7 @@ const WARM_SEASON_TASKS: Record<string, ScheduleTask[]> = {
             color: "text-orange-700",
             bgColor: "bg-orange-500",
             urgencyDays: 21,
+            completionActivityTypes: ["pre-emergent"],
         },
         {
             key: "spring-feed-2026",
@@ -281,6 +290,7 @@ const WARM_SEASON_TASKS: Record<string, ScheduleTask[]> = {
             color: "text-blue-700",
             bgColor: "bg-blue-500",
             urgencyDays: 14,
+            completionActivityTypes: ["fertilize"],
         },
         {
             key: "iron-app-2026",
@@ -291,6 +301,7 @@ const WARM_SEASON_TASKS: Record<string, ScheduleTask[]> = {
             color: "text-teal-700",
             bgColor: "bg-teal-500",
             urgencyDays: 14,
+            completionActivityTypes: ["fertilize"],
         },
         {
             key: "summer-fert-2026",
@@ -301,6 +312,7 @@ const WARM_SEASON_TASKS: Record<string, ScheduleTask[]> = {
             color: "text-blue-700",
             bgColor: "bg-blue-400",
             urgencyDays: 14,
+            completionActivityTypes: ["fertilize"],
         },
         {
             key: "chinch-watch-2026",
@@ -321,6 +333,7 @@ const WARM_SEASON_TASKS: Record<string, ScheduleTask[]> = {
             color: "text-blue-700",
             bgColor: "bg-blue-400",
             urgencyDays: 14,
+            completionActivityTypes: ["fertilize"],
         },
     ],
     zoysia: [
@@ -333,6 +346,7 @@ const WARM_SEASON_TASKS: Record<string, ScheduleTask[]> = {
             color: "text-orange-700",
             bgColor: "bg-orange-500",
             urgencyDays: 21,
+            completionActivityTypes: ["pre-emergent"],
         },
         {
             key: "dethatching-2026",
@@ -353,6 +367,7 @@ const WARM_SEASON_TASKS: Record<string, ScheduleTask[]> = {
             color: "text-blue-700",
             bgColor: "bg-blue-500",
             urgencyDays: 14,
+            completionActivityTypes: ["fertilize"],
         },
         {
             key: "aeration-2026",
@@ -363,6 +378,7 @@ const WARM_SEASON_TASKS: Record<string, ScheduleTask[]> = {
             color: "text-purple-700",
             bgColor: "bg-purple-500",
             urgencyDays: 14,
+            completionActivityTypes: ["aerate"],
         },
         {
             key: "summer-fert-2026",
@@ -373,6 +389,7 @@ const WARM_SEASON_TASKS: Record<string, ScheduleTask[]> = {
             color: "text-blue-700",
             bgColor: "bg-blue-400",
             urgencyDays: 14,
+            completionActivityTypes: ["fertilize"],
         },
         {
             key: "fall-fert-2026",
@@ -383,6 +400,7 @@ const WARM_SEASON_TASKS: Record<string, ScheduleTask[]> = {
             color: "text-blue-700",
             bgColor: "bg-blue-400",
             urgencyDays: 14,
+            completionActivityTypes: ["fertilize"],
         },
     ],
 };
@@ -397,6 +415,7 @@ const COOL_SEASON_TASKS: ScheduleTask[] = [
         color: "text-blue-700",
         bgColor: "bg-blue-500",
         urgencyDays: 14,
+        completionActivityTypes: ["fertilize"],
     },
     {
         key: "pre-emergent-2026",
@@ -407,6 +426,7 @@ const COOL_SEASON_TASKS: ScheduleTask[] = [
         color: "text-orange-700",
         bgColor: "bg-orange-500",
         urgencyDays: 21,
+        completionActivityTypes: ["pre-emergent"],
     },
     {
         key: "spring-mow-start-2026",
@@ -417,6 +437,7 @@ const COOL_SEASON_TASKS: ScheduleTask[] = [
         color: "text-lawn-green-700",
         bgColor: "bg-lawn-green-500",
         urgencyDays: 14,
+        completionActivityTypes: ["mow"],
     },
     {
         key: "late-spring-fert-2026",
@@ -427,6 +448,7 @@ const COOL_SEASON_TASKS: ScheduleTask[] = [
         color: "text-blue-700",
         bgColor: "bg-blue-400",
         urgencyDays: 14,
+        completionActivityTypes: ["fertilize"],
     },
     {
         key: "summer-stress-2026",
@@ -447,6 +469,7 @@ const COOL_SEASON_TASKS: ScheduleTask[] = [
         color: "text-purple-700",
         bgColor: "bg-purple-500",
         urgencyDays: 21,
+        completionActivityTypes: ["aerate"],
     },
     {
         key: "fall-fert-2026",
@@ -457,6 +480,7 @@ const COOL_SEASON_TASKS: ScheduleTask[] = [
         color: "text-blue-700",
         bgColor: "bg-blue-500",
         urgencyDays: 14,
+        completionActivityTypes: ["fertilize"],
     },
     {
         key: "winterizer-2026",
@@ -467,6 +491,7 @@ const COOL_SEASON_TASKS: ScheduleTask[] = [
         color: "text-blue-700",
         bgColor: "bg-blue-400",
         urgencyDays: 14,
+        completionActivityTypes: ["fertilize"],
     },
 ];
 
@@ -480,6 +505,31 @@ export function getScheduleTasks(grassType: GrassType = "bermuda"): ScheduleTask
 
     // Warm-season: use specific schedule if available, otherwise fall back to bermuda
     return WARM_SEASON_TASKS[grassType] ?? WARM_SEASON_TASKS["bermuda"];
+}
+
+export function getCompletedScheduleTaskKeys(
+    tasks: ScheduleTask[],
+    explicitCompletions: string[],
+    activities: Pick<{ type: ActivityType; date: string }, "type" | "date">[]
+): string[] {
+    const completed = new Set(explicitCompletions);
+
+    for (const task of tasks) {
+        if (!task.completionActivityTypes?.length) continue;
+
+        const hasMatchingActivity = activities.some((activity) => {
+            if (!task.completionActivityTypes!.includes(activity.type)) return false;
+
+            const activityDate = new Date(`${activity.date.slice(0, 10)}T12:00:00`);
+            return activityDate >= task.startDate && activityDate <= task.endDate;
+        });
+
+        if (hasMatchingActivity) {
+            completed.add(task.key);
+        }
+    }
+
+    return [...completed];
 }
 
 // Keep backward compat — the old export that some pages may still reference

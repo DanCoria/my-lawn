@@ -8,6 +8,7 @@ import {
     getNextStep,
     getQuickTip,
     getScheduleTasks,
+    getCompletedScheduleTaskKeys,
     getGrassTypeInfo,
     formatDate,
 } from "@/lib/lawnLogic";
@@ -63,15 +64,29 @@ export function DashboardPage() {
     const weatherAdvice = weather ? getWeatherAdvice(weather) : null;
 
     // Fetch task completions
-    const { data: completions = [] } = useQuery({
-        queryKey: ["task-completions", user?.id],
+    const { data: explicitCompletions = [] } = useQuery({
+        queryKey: ["task-completions", user?.id, grassType],
         queryFn: async () => {
             const { data } = await supabase
                 .from("task_completions")
                 .select("task_key")
-                .eq("user_id", user!.id);
+                .eq("user_id", user!.id)
+                .eq("grass_type", grassType);
             return data?.map((r) => r.task_key) ?? [];
         },
+        enabled: !!user,
+    });
+
+    const { data: activities = [] } = useQuery({
+        queryKey: ["activities", user?.id],
+        queryFn: async () => {
+            const { data } = await supabase
+                .from("activities")
+                .select("type,date")
+                .eq("user_id", user!.id);
+            return data ?? [];
+        },
+        enabled: !!user,
     });
 
     // Fetch last mow
@@ -98,16 +113,23 @@ export function DashboardPage() {
                     .from("task_completions")
                     .delete()
                     .eq("user_id", user!.id)
+                    .eq("grass_type", grassType)
                     .eq("task_key", key);
             } else {
-                await supabase.from("task_completions").insert({
-                    user_id: user!.id,
-                    task_key: key,
-                });
+                await supabase
+                    .from("task_completions")
+                    .upsert(
+                        {
+                            user_id: user!.id,
+                            grass_type: grassType,
+                            task_key: key,
+                        },
+                        { onConflict: "user_id,grass_type,task_key" }
+                    );
             }
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["task-completions"] });
+            queryClient.invalidateQueries({ queryKey: ["task-completions", user?.id, grassType] });
         },
     });
 
@@ -116,6 +138,7 @@ export function DashboardPage() {
             (TODAY.getTime() - new Date(lastMow).getTime()) / (1000 * 60 * 60 * 24)
         )
         : null;
+    const completions = getCompletedScheduleTaskKeys(scheduleTasks, explicitCompletions, activities);
 
     return (
         <div className="min-h-screen bg-gray-50">

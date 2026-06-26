@@ -18,6 +18,7 @@ export interface Activity {
 export interface TaskCompletion {
     id: string;
     user_id: string;
+    grass_type: GrassType;
     task_key: string;
     completed_at: string;
 }
