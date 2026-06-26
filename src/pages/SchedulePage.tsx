@@ -3,7 +3,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import { useGrassType } from "@/contexts/LawnProfileContext";
 import { BottomNav } from "@/components/BottomNav";
-import { getScheduleTasks, getGrassTypeInfo, getFertilizationNote, formatDate } from "@/lib/lawnLogic";
+import { getScheduleTasks, getGrassTypeInfo, getFertilizationNote, getCompletedScheduleTaskKeys, formatDate } from "@/lib/lawnLogic";
 import { CheckCircle2 } from "lucide-react";
 
 const YEAR = 2026;
@@ -25,18 +25,33 @@ export function SchedulePage() {
     const scheduleTasks = getScheduleTasks(grassType);
     const fertNote = getFertilizationNote(grassType);
 
-    const { data: completions = [] } = useQuery({
-        queryKey: ["task-completions", user?.id],
+    const { data: explicitCompletions = [] } = useQuery({
+        queryKey: ["task-completions", user?.id, grassType],
         queryFn: async () => {
             const { data } = await supabase
                 .from("task_completions")
                 .select("task_key")
-                .eq("user_id", user!.id);
+                .eq("user_id", user!.id)
+                .eq("grass_type", grassType);
             return data?.map((r) => r.task_key) ?? [];
         },
+        enabled: !!user,
+    });
+
+    const { data: activities = [] } = useQuery({
+        queryKey: ["activities", user?.id],
+        queryFn: async () => {
+            const { data } = await supabase
+                .from("activities")
+                .select("type,date")
+                .eq("user_id", user!.id);
+            return data ?? [];
+        },
+        enabled: !!user,
     });
 
     const todayPct = toPercent(TODAY);
+    const completions = getCompletedScheduleTaskKeys(scheduleTasks, explicitCompletions, activities);
 
     return (
         <div className="min-h-screen bg-gray-50">
