@@ -8,7 +8,7 @@ import {
     getNextStep,
     getQuickTip,
     getScheduleTasks,
-    getCompletedScheduleTaskKeys,
+    getScheduleTaskCompletionInfo,
     getGrassTypeInfo,
     formatDate,
 } from "@/lib/lawnLogic";
@@ -32,6 +32,13 @@ import {
 
 
 const TODAY = new Date();
+
+function formatCompletionDate(date: string): string {
+    return new Date(`${date.slice(0, 10)}T12:00:00`).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+    });
+}
 
 export function DashboardPage() {
     const { user } = useAuth();
@@ -138,7 +145,7 @@ export function DashboardPage() {
             (TODAY.getTime() - new Date(lastMow).getTime()) / (1000 * 60 * 60 * 24)
         )
         : null;
-    const completions = getCompletedScheduleTaskKeys(scheduleTasks, explicitCompletions, activities);
+    const completionInfo = getScheduleTaskCompletionInfo(scheduleTasks, explicitCompletions, activities);
 
     return (
         <div className="min-h-screen bg-gray-50">
@@ -346,15 +353,21 @@ export function DashboardPage() {
                     <p className="section-title px-1">2026 {grassInfo.name} Season Checklist</p>
                     <div className="card overflow-hidden">
                         {scheduleTasks.map((task, idx) => {
-                            const done = completions.includes(task.key);
+                            const completion = completionInfo[task.key];
+                            const done = !!completion;
+                            const activityDerived = completion?.source === "activity" || completion?.source === "both";
                             const isActive = TODAY >= task.startDate && TODAY <= task.endDate;
                             return (
                                 <button
                                     key={task.key}
                                     id={`task-${task.key}`}
-                                    onClick={() => toggleTask.mutate({ key: task.key, completed: done })}
+                                    onClick={() => {
+                                        if (activityDerived) return;
+                                        toggleTask.mutate({ key: task.key, completed: done });
+                                    }}
+                                    title={activityDerived ? "This is completed from your Activity Log" : undefined}
                                     className={`w-full flex items-center gap-4 px-4 py-4 text-left transition-colors
-                    hover:bg-gray-50 active:bg-gray-100
+                    ${activityDerived ? "cursor-default" : "hover:bg-gray-50 active:bg-gray-100"}
                     ${idx < scheduleTasks.length - 1 ? "border-b border-gray-100" : ""}
                     ${done ? "opacity-60" : ""}
                   `}
@@ -376,6 +389,13 @@ export function DashboardPage() {
                                         <p className="text-xs text-gray-400 mt-0.5">
                                             {formatDate(task.startDate)} – {formatDate(task.endDate)}
                                         </p>
+                                        {done && (
+                                            <p className="text-[11px] text-lawn-green-700 font-medium mt-1">
+                                                {activityDerived
+                                                    ? `Completed from Activity Log${completion.activityDate ? ` · ${formatCompletionDate(completion.activityDate)}` : ""}`
+                                                    : "Marked complete"}
+                                            </p>
+                                        )}
                                     </div>
                                 </button>
                             );
