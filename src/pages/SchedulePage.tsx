@@ -3,7 +3,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import { useGrassType } from "@/contexts/LawnProfileContext";
 import { BottomNav } from "@/components/BottomNav";
-import { getScheduleTasks, getGrassTypeInfo, getFertilizationNote, getCompletedScheduleTaskKeys, formatDate } from "@/lib/lawnLogic";
+import { getScheduleTasks, getGrassTypeInfo, getFertilizationNote, getScheduleTaskCompletionInfo, formatDate } from "@/lib/lawnLogic";
 import { CheckCircle2 } from "lucide-react";
 
 const YEAR = 2026;
@@ -14,6 +14,13 @@ const TODAY = new Date();
 
 function toPercent(date: Date): number {
     return Math.max(0, Math.min(100, ((date.getTime() - YEAR_START.getTime()) / YEAR_MS) * 100));
+}
+
+function formatCompletionDate(date: string): string {
+    return new Date(`${date.slice(0, 10)}T12:00:00`).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+    });
 }
 
 const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -51,7 +58,7 @@ export function SchedulePage() {
     });
 
     const todayPct = toPercent(TODAY);
-    const completions = getCompletedScheduleTaskKeys(scheduleTasks, explicitCompletions, activities);
+    const completionInfo = getScheduleTaskCompletionInfo(scheduleTasks, explicitCompletions, activities);
 
     return (
         <div className="min-h-screen bg-gray-50">
@@ -88,7 +95,7 @@ export function SchedulePage() {
                                 const startPct = toPercent(task.startDate);
                                 const endPct = toPercent(task.endDate);
                                 const widthPct = endPct - startPct;
-                                const done = completions.includes(task.key);
+                                const done = !!completionInfo[task.key];
                                 const isActive = TODAY >= task.startDate && TODAY <= task.endDate;
 
                                 return (
@@ -141,7 +148,9 @@ export function SchedulePage() {
                     <p className="section-title px-1">Task Windows</p>
                     <div className="space-y-3">
                         {scheduleTasks.map((task) => {
-                            const done = completions.includes(task.key);
+                            const completion = completionInfo[task.key];
+                            const done = !!completion;
+                            const activityDerived = completion?.source === "activity" || completion?.source === "both";
                             const isActive = TODAY >= task.startDate && TODAY <= task.endDate;
                             const isPast = TODAY > task.endDate;
 
@@ -176,6 +185,13 @@ export function SchedulePage() {
                                             </span>
                                         </div>
                                         <p className="text-xs text-gray-500 mt-2 leading-relaxed">{task.description}</p>
+                                        {done && (
+                                            <p className="text-[11px] text-lawn-green-700 font-medium mt-2">
+                                                {activityDerived
+                                                    ? `Completed from Activity Log${completion.activityDate ? ` · ${formatCompletionDate(completion.activityDate)}` : ""}`
+                                                    : "Marked complete"}
+                                            </p>
+                                        )}
                                     </div>
                                 </div>
                             );

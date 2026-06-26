@@ -512,24 +512,46 @@ export function getCompletedScheduleTaskKeys(
     explicitCompletions: string[],
     activities: Pick<{ type: ActivityType; date: string }, "type" | "date">[]
 ): string[] {
-    const completed = new Set(explicitCompletions);
+    return Object.keys(getScheduleTaskCompletionInfo(tasks, explicitCompletions, activities));
+}
+
+export interface ScheduleTaskCompletionInfo {
+    source: "manual" | "activity" | "both";
+    activityDate?: string;
+}
+
+export function getScheduleTaskCompletionInfo(
+    tasks: ScheduleTask[],
+    explicitCompletions: string[],
+    activities: Pick<{ type: ActivityType; date: string }, "type" | "date">[]
+): Record<string, ScheduleTaskCompletionInfo> {
+    const completed: Record<string, ScheduleTaskCompletionInfo> = {};
+
+    for (const key of explicitCompletions) {
+        completed[key] = { source: "manual" };
+    }
 
     for (const task of tasks) {
         if (!task.completionActivityTypes?.length) continue;
 
-        const hasMatchingActivity = activities.some((activity) => {
-            if (!task.completionActivityTypes!.includes(activity.type)) return false;
+        const matchingActivity = activities
+            .filter((activity) => {
+                if (!task.completionActivityTypes!.includes(activity.type)) return false;
 
-            const activityDate = new Date(`${activity.date.slice(0, 10)}T12:00:00`);
-            return activityDate >= task.startDate && activityDate <= task.endDate;
-        });
+                const activityDate = new Date(`${activity.date.slice(0, 10)}T12:00:00`);
+                return activityDate >= task.startDate && activityDate <= task.endDate;
+            })
+            .sort((a, b) => a.date.localeCompare(b.date))[0];
 
-        if (hasMatchingActivity) {
-            completed.add(task.key);
-        }
+        if (!matchingActivity) continue;
+
+        completed[task.key] = {
+            source: completed[task.key] ? "both" : "activity",
+            activityDate: matchingActivity.date,
+        };
     }
 
-    return [...completed];
+    return completed;
 }
 
 // Keep backward compat — the old export that some pages may still reference
