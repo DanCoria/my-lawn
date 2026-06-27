@@ -559,15 +559,22 @@ export const SCHEDULE_TASKS: ScheduleTask[] = WARM_SEASON_TASKS["bermuda"];
 
 // ── Next Step Logic ──────────────────────────────────────────
 
-/** Get the current most-urgent task based on today's date */
-export function getNextStep(today: Date, grassType: GrassType = "bermuda"): {
+/** Get the current most-urgent incomplete task based on today's date */
+export function getNextStep(
+    today: Date,
+    grassType: GrassType = "bermuda",
+    completedTaskKeys: string[] = []
+): {
     task: ScheduleTask | null;
     isUrgent: boolean;
     daysUntil: number;
 } {
     const tasks = getScheduleTasks(grassType);
+    const completed = new Set(completedTaskKeys);
 
     for (const task of tasks) {
+        if (completed.has(task.key)) continue;
+
         const msPerDay = 1000 * 60 * 60 * 24;
         const daysUntilStart = Math.ceil(
             (task.startDate.getTime() - today.getTime()) / msPerDay
