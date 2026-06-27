@@ -47,7 +47,6 @@ export function DashboardPage() {
     const queryClient = useQueryClient();
     const lawnState = getLawnState(TODAY, grassType);
     const scheduleTasks = getScheduleTasks(grassType);
-    const { task: nextTask, isUrgent, daysUntil } = getNextStep(TODAY, grassType);
     const tip = getQuickTip(TODAY, grassType);
     const { profile, loading: profileLoading } = useLawnProfile();
     const { location: geoLoc, loading: geoLoading } = useGeolocation();
@@ -146,6 +145,8 @@ export function DashboardPage() {
         )
         : null;
     const completionInfo = getScheduleTaskCompletionInfo(scheduleTasks, explicitCompletions, activities);
+    const completedTaskKeys = Object.keys(completionInfo);
+    const { task: nextTask, isUrgent, daysUntil } = getNextStep(TODAY, grassType, completedTaskKeys);
 
     return (
         <div className="min-h-screen bg-gray-50">
