@@ -4,6 +4,7 @@ import { useLawnProfile } from "@/contexts/LawnProfileContext";
 import { GRASS_TYPES, getGrassTypeInfo } from "@/lib/lawnLogic";
 import { diagnoseLawn, resizeImageForAI } from "@/lib/gemini";
 import type { GrassType, GrassTypeInfo } from "@/types/database";
+import type { GeocodingResult } from "@/types/geocoding";
 import {
     Loader2,
     ChevronRight,
@@ -100,7 +101,7 @@ export function OnboardingPage() {
     const [searchQuery, setSearchQuery] = useState("");
     const [searching, setSearching] = useState(false);
     const [searchError, setSearchError] = useState<string | null>(null);
-    const [searchResults, setSearchResults] = useState<any[]>([]);
+    const [searchResults, setSearchResults] = useState<GeocodingResult[]>([]);
 
     useEffect(() => {
         const timeoutId = setTimeout(() => {
@@ -200,7 +201,7 @@ export function OnboardingPage() {
         );
     };
 
-    const handleSelectResult = (result: any) => {
+    const handleSelectResult = (result: GeocodingResult) => {
         const lat = Math.round(result.latitude * 100) / 100;
         const lon = Math.round(result.longitude * 100) / 100;
         setCoordinates({ lat, lon });

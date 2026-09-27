@@ -108,11 +108,10 @@ Return ONLY valid JSON. No markdown, no explanation outside the JSON.
             headers: { ...corsHeaders, "Content-Type": "application/json" },
             status: 200,
         });
-    } catch (e) {
-        const error = e as any;
+    } catch (error) {
         console.error("Error in diagnose-lawn function:", error);
 
-        let errorMessage = error.message;
+        let errorMessage = error instanceof Error ? error.message : "Unknown diagnosis error";
         let status = 500;
 
         // Friendly quota error

@@ -46,7 +46,7 @@ export function DashboardPage() {
     const grassInfo = getGrassTypeInfo(grassType);
     const queryClient = useQueryClient();
     const lawnState = getLawnState(TODAY, grassType);
-    const scheduleTasks = getScheduleTasks(grassType);
+    const scheduleTasks = getScheduleTasks(grassType, TODAY.getFullYear());
     const tip = getQuickTip(TODAY, grassType);
     const { profile, loading: profileLoading } = useLawnProfile();
     const { location: geoLoc, loading: geoLoading } = useGeolocation();
@@ -88,8 +88,9 @@ export function DashboardPage() {
         queryFn: async () => {
             const { data } = await supabase
                 .from("activities")
-                .select("type,date")
-                .eq("user_id", user!.id);
+                .select("*")
+                .eq("user_id", user!.id)
+                .order("date", { ascending: false });
             return data ?? [];
         },
         enabled: !!user,
@@ -351,7 +352,9 @@ export function DashboardPage() {
 
                 {/* Action Checklist */}
                 <div>
-                    <p className="section-title px-1">2026 {grassInfo.name} Season Checklist</p>
+                    <p className="section-title px-1">
+                        {TODAY.getFullYear()} {grassInfo.name} Season Checklist
+                    </p>
                     <div className="card overflow-hidden">
                         {scheduleTasks.map((task, idx) => {
                             const completion = completionInfo[task.key];

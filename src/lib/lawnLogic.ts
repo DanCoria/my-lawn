@@ -186,7 +186,7 @@ export interface ScheduleTask {
     completionActivityTypes?: ActivityType[];
 }
 
-const YEAR = 2026;
+const SCHEDULE_TEMPLATE_YEAR = 2000;
 
 // Per-grass-type schedule configurations
 const WARM_SEASON_TASKS: Record<string, ScheduleTask[]> = {
@@ -195,8 +195,8 @@ const WARM_SEASON_TASKS: Record<string, ScheduleTask[]> = {
             key: "pre-emergent-2026",
             label: "Pre-Emergent",
             description: "Apply Prodiamine/Barricade before soil hits 55°F",
-            startDate: new Date(YEAR, 1, 1),
-            endDate: new Date(YEAR, 2, 15),
+            startDate: new Date(SCHEDULE_TEMPLATE_YEAR, 1, 1),
+            endDate: new Date(SCHEDULE_TEMPLATE_YEAR, 2, 15),
             color: "text-orange-700",
             bgColor: "bg-orange-500",
             urgencyDays: 21,
@@ -206,8 +206,8 @@ const WARM_SEASON_TASKS: Record<string, ScheduleTask[]> = {
             key: "spring-scalp-2026",
             label: "Spring Scalp",
             description: "Scalp lawn to remove dormant thatch, promote growth",
-            startDate: new Date(YEAR, 2, 1),
-            endDate: new Date(YEAR, 2, 20),
+            startDate: new Date(SCHEDULE_TEMPLATE_YEAR, 2, 1),
+            endDate: new Date(SCHEDULE_TEMPLATE_YEAR, 2, 20),
             color: "text-yellow-700",
             bgColor: "bg-yellow-500",
             urgencyDays: 14,
@@ -217,8 +217,8 @@ const WARM_SEASON_TASKS: Record<string, ScheduleTask[]> = {
             key: "first-fert-2026",
             label: "First Fertilization",
             description: "9-0-24 or similar — 2 weeks after scalp",
-            startDate: new Date(YEAR, 2, 15),
-            endDate: new Date(YEAR, 3, 15),
+            startDate: new Date(SCHEDULE_TEMPLATE_YEAR, 2, 15),
+            endDate: new Date(SCHEDULE_TEMPLATE_YEAR, 3, 15),
             color: "text-blue-700",
             bgColor: "bg-blue-500",
             urgencyDays: 14,
@@ -228,8 +228,8 @@ const WARM_SEASON_TASKS: Record<string, ScheduleTask[]> = {
             key: "aeration-2026",
             label: "Aeration",
             description: "Core aerate to reduce compaction",
-            startDate: new Date(YEAR, 4, 1),
-            endDate: new Date(YEAR, 5, 30),
+            startDate: new Date(SCHEDULE_TEMPLATE_YEAR, 4, 1),
+            endDate: new Date(SCHEDULE_TEMPLATE_YEAR, 5, 30),
             color: "text-purple-700",
             bgColor: "bg-purple-500",
             urgencyDays: 14,
@@ -239,8 +239,8 @@ const WARM_SEASON_TASKS: Record<string, ScheduleTask[]> = {
             key: "second-fert-2026",
             label: "2nd Fertilization",
             description: "Continue 4-6 week cycle",
-            startDate: new Date(YEAR, 4, 1),
-            endDate: new Date(YEAR, 4, 31),
+            startDate: new Date(SCHEDULE_TEMPLATE_YEAR, 4, 1),
+            endDate: new Date(SCHEDULE_TEMPLATE_YEAR, 4, 31),
             color: "text-blue-700",
             bgColor: "bg-blue-400",
             urgencyDays: 14,
@@ -250,8 +250,8 @@ const WARM_SEASON_TASKS: Record<string, ScheduleTask[]> = {
             key: "third-fert-2026",
             label: "3rd Fertilization",
             description: "Mid-summer push",
-            startDate: new Date(YEAR, 5, 15),
-            endDate: new Date(YEAR, 6, 15),
+            startDate: new Date(SCHEDULE_TEMPLATE_YEAR, 5, 15),
+            endDate: new Date(SCHEDULE_TEMPLATE_YEAR, 6, 15),
             color: "text-blue-700",
             bgColor: "bg-blue-400",
             urgencyDays: 14,
@@ -261,8 +261,8 @@ const WARM_SEASON_TASKS: Record<string, ScheduleTask[]> = {
             key: "fourth-fert-2026",
             label: "4th Fertilization",
             description: "Late summer — light K-heavy formula",
-            startDate: new Date(YEAR, 7, 1),
-            endDate: new Date(YEAR, 8, 1),
+            startDate: new Date(SCHEDULE_TEMPLATE_YEAR, 7, 1),
+            endDate: new Date(SCHEDULE_TEMPLATE_YEAR, 8, 1),
             color: "text-blue-700",
             bgColor: "bg-blue-400",
             urgencyDays: 14,
@@ -274,8 +274,8 @@ const WARM_SEASON_TASKS: Record<string, ScheduleTask[]> = {
             key: "pre-emergent-2026",
             label: "Pre-Emergent",
             description: "Apply Atrazine (safe for St. Aug) when soil nears 55°F",
-            startDate: new Date(YEAR, 1, 15),
-            endDate: new Date(YEAR, 2, 15),
+            startDate: new Date(SCHEDULE_TEMPLATE_YEAR, 1, 15),
+            endDate: new Date(SCHEDULE_TEMPLATE_YEAR, 2, 15),
             color: "text-orange-700",
             bgColor: "bg-orange-500",
             urgencyDays: 21,
@@ -285,8 +285,8 @@ const WARM_SEASON_TASKS: Record<string, ScheduleTask[]> = {
             key: "spring-feed-2026",
             label: "Spring Feeding",
             description: "15-0-15 or similar slow-release when green-up is 50%+",
-            startDate: new Date(YEAR, 3, 1),
-            endDate: new Date(YEAR, 3, 30),
+            startDate: new Date(SCHEDULE_TEMPLATE_YEAR, 3, 1),
+            endDate: new Date(SCHEDULE_TEMPLATE_YEAR, 3, 30),
             color: "text-blue-700",
             bgColor: "bg-blue-500",
             urgencyDays: 14,
@@ -296,8 +296,8 @@ const WARM_SEASON_TASKS: Record<string, ScheduleTask[]> = {
             key: "iron-app-2026",
             label: "Iron Application",
             description: "Ironite or FeSO₄ for deep green without excessive growth",
-            startDate: new Date(YEAR, 4, 1),
-            endDate: new Date(YEAR, 4, 31),
+            startDate: new Date(SCHEDULE_TEMPLATE_YEAR, 4, 1),
+            endDate: new Date(SCHEDULE_TEMPLATE_YEAR, 4, 31),
             color: "text-teal-700",
             bgColor: "bg-teal-500",
             urgencyDays: 14,
@@ -307,8 +307,8 @@ const WARM_SEASON_TASKS: Record<string, ScheduleTask[]> = {
             key: "summer-fert-2026",
             label: "Summer Fertilization",
             description: "Light nitrogen — avoid over-pushing in peak heat",
-            startDate: new Date(YEAR, 5, 15),
-            endDate: new Date(YEAR, 6, 15),
+            startDate: new Date(SCHEDULE_TEMPLATE_YEAR, 5, 15),
+            endDate: new Date(SCHEDULE_TEMPLATE_YEAR, 6, 15),
             color: "text-blue-700",
             bgColor: "bg-blue-400",
             urgencyDays: 14,
@@ -318,8 +318,8 @@ const WARM_SEASON_TASKS: Record<string, ScheduleTask[]> = {
             key: "chinch-watch-2026",
             label: "Chinch Bug Watch",
             description: "Inspect for chinch bugs in hot, dry areas; treat if found",
-            startDate: new Date(YEAR, 5, 1),
-            endDate: new Date(YEAR, 7, 31),
+            startDate: new Date(SCHEDULE_TEMPLATE_YEAR, 5, 1),
+            endDate: new Date(SCHEDULE_TEMPLATE_YEAR, 7, 31),
             color: "text-red-700",
             bgColor: "bg-red-400",
             urgencyDays: 7,
@@ -328,8 +328,8 @@ const WARM_SEASON_TASKS: Record<string, ScheduleTask[]> = {
             key: "fall-fert-2026",
             label: "Fall Potassium",
             description: "High-K winterizer to harden before frost",
-            startDate: new Date(YEAR, 8, 15),
-            endDate: new Date(YEAR, 9, 15),
+            startDate: new Date(SCHEDULE_TEMPLATE_YEAR, 8, 15),
+            endDate: new Date(SCHEDULE_TEMPLATE_YEAR, 9, 15),
             color: "text-blue-700",
             bgColor: "bg-blue-400",
             urgencyDays: 14,
@@ -341,8 +341,8 @@ const WARM_SEASON_TASKS: Record<string, ScheduleTask[]> = {
             key: "pre-emergent-2026",
             label: "Pre-Emergent",
             description: "Apply Prodiamine when soil temps approach 55°F",
-            startDate: new Date(YEAR, 1, 15),
-            endDate: new Date(YEAR, 2, 15),
+            startDate: new Date(SCHEDULE_TEMPLATE_YEAR, 1, 15),
+            endDate: new Date(SCHEDULE_TEMPLATE_YEAR, 2, 15),
             color: "text-orange-700",
             bgColor: "bg-orange-500",
             urgencyDays: 21,
@@ -352,8 +352,8 @@ const WARM_SEASON_TASKS: Record<string, ScheduleTask[]> = {
             key: "dethatching-2026",
             label: "Dethatching",
             description: "Zoysia builds heavy thatch — dethatch or power-rake",
-            startDate: new Date(YEAR, 3, 15),
-            endDate: new Date(YEAR, 4, 15),
+            startDate: new Date(SCHEDULE_TEMPLATE_YEAR, 3, 15),
+            endDate: new Date(SCHEDULE_TEMPLATE_YEAR, 4, 15),
             color: "text-yellow-700",
             bgColor: "bg-yellow-500",
             urgencyDays: 14,
@@ -362,8 +362,8 @@ const WARM_SEASON_TASKS: Record<string, ScheduleTask[]> = {
             key: "first-fert-2026",
             label: "First Fertilization",
             description: "Slow-release N when fully greened up",
-            startDate: new Date(YEAR, 3, 15),
-            endDate: new Date(YEAR, 4, 15),
+            startDate: new Date(SCHEDULE_TEMPLATE_YEAR, 3, 15),
+            endDate: new Date(SCHEDULE_TEMPLATE_YEAR, 4, 15),
             color: "text-blue-700",
             bgColor: "bg-blue-500",
             urgencyDays: 14,
@@ -373,8 +373,8 @@ const WARM_SEASON_TASKS: Record<string, ScheduleTask[]> = {
             key: "aeration-2026",
             label: "Aeration",
             description: "Core aerate during peak growth",
-            startDate: new Date(YEAR, 4, 1),
-            endDate: new Date(YEAR, 5, 30),
+            startDate: new Date(SCHEDULE_TEMPLATE_YEAR, 4, 1),
+            endDate: new Date(SCHEDULE_TEMPLATE_YEAR, 5, 30),
             color: "text-purple-700",
             bgColor: "bg-purple-500",
             urgencyDays: 14,
@@ -384,8 +384,8 @@ const WARM_SEASON_TASKS: Record<string, ScheduleTask[]> = {
             key: "summer-fert-2026",
             label: "Summer Fertilization",
             description: "Light feeding every 6-8 weeks",
-            startDate: new Date(YEAR, 5, 15),
-            endDate: new Date(YEAR, 6, 15),
+            startDate: new Date(SCHEDULE_TEMPLATE_YEAR, 5, 15),
+            endDate: new Date(SCHEDULE_TEMPLATE_YEAR, 6, 15),
             color: "text-blue-700",
             bgColor: "bg-blue-400",
             urgencyDays: 14,
@@ -395,8 +395,8 @@ const WARM_SEASON_TASKS: Record<string, ScheduleTask[]> = {
             key: "fall-fert-2026",
             label: "Fall Winterizer",
             description: "Potassium-heavy feed to harden for winter",
-            startDate: new Date(YEAR, 8, 15),
-            endDate: new Date(YEAR, 9, 15),
+            startDate: new Date(SCHEDULE_TEMPLATE_YEAR, 8, 15),
+            endDate: new Date(SCHEDULE_TEMPLATE_YEAR, 9, 15),
             color: "text-blue-700",
             bgColor: "bg-blue-400",
             urgencyDays: 14,
@@ -410,8 +410,8 @@ const COOL_SEASON_TASKS: ScheduleTask[] = [
         key: "early-spring-fert-2026",
         label: "Early Spring Fertilization",
         description: "Light N application as growth resumes",
-        startDate: new Date(YEAR, 2, 1),
-        endDate: new Date(YEAR, 2, 31),
+        startDate: new Date(SCHEDULE_TEMPLATE_YEAR, 2, 1),
+        endDate: new Date(SCHEDULE_TEMPLATE_YEAR, 2, 31),
         color: "text-blue-700",
         bgColor: "bg-blue-500",
         urgencyDays: 14,
@@ -421,8 +421,8 @@ const COOL_SEASON_TASKS: ScheduleTask[] = [
         key: "pre-emergent-2026",
         label: "Pre-Emergent (Crabgrass)",
         description: "Apply before soil hits 55°F to prevent crabgrass",
-        startDate: new Date(YEAR, 2, 15),
-        endDate: new Date(YEAR, 3, 15),
+        startDate: new Date(SCHEDULE_TEMPLATE_YEAR, 2, 15),
+        endDate: new Date(SCHEDULE_TEMPLATE_YEAR, 3, 15),
         color: "text-orange-700",
         bgColor: "bg-orange-500",
         urgencyDays: 21,
@@ -432,8 +432,8 @@ const COOL_SEASON_TASKS: ScheduleTask[] = [
         key: "spring-mow-start-2026",
         label: "Begin Regular Mowing",
         description: "Set mower to 3-3.5 inches; mow when grass is actively growing",
-        startDate: new Date(YEAR, 3, 1),
-        endDate: new Date(YEAR, 3, 30),
+        startDate: new Date(SCHEDULE_TEMPLATE_YEAR, 3, 1),
+        endDate: new Date(SCHEDULE_TEMPLATE_YEAR, 3, 30),
         color: "text-lawn-green-700",
         bgColor: "bg-lawn-green-500",
         urgencyDays: 14,
@@ -443,8 +443,8 @@ const COOL_SEASON_TASKS: ScheduleTask[] = [
         key: "late-spring-fert-2026",
         label: "Late Spring Fertilization",
         description: "Slow-release N to sustain through early summer",
-        startDate: new Date(YEAR, 4, 1),
-        endDate: new Date(YEAR, 4, 31),
+        startDate: new Date(SCHEDULE_TEMPLATE_YEAR, 4, 1),
+        endDate: new Date(SCHEDULE_TEMPLATE_YEAR, 4, 31),
         color: "text-blue-700",
         bgColor: "bg-blue-400",
         urgencyDays: 14,
@@ -454,8 +454,8 @@ const COOL_SEASON_TASKS: ScheduleTask[] = [
         key: "summer-stress-2026",
         label: "Summer Stress Mgmt",
         description: "Raise mower height, water deeply 1\"/week, no fertilizer",
-        startDate: new Date(YEAR, 5, 15),
-        endDate: new Date(YEAR, 7, 31),
+        startDate: new Date(SCHEDULE_TEMPLATE_YEAR, 5, 15),
+        endDate: new Date(SCHEDULE_TEMPLATE_YEAR, 7, 31),
         color: "text-red-700",
         bgColor: "bg-red-400",
         urgencyDays: 7,
@@ -464,8 +464,8 @@ const COOL_SEASON_TASKS: ScheduleTask[] = [
         key: "fall-aeration-2026",
         label: "Fall Aeration & Overseeding",
         description: "Core aerate and overseed bare/thin areas — best time of year",
-        startDate: new Date(YEAR, 8, 1),
-        endDate: new Date(YEAR, 9, 15),
+        startDate: new Date(SCHEDULE_TEMPLATE_YEAR, 8, 1),
+        endDate: new Date(SCHEDULE_TEMPLATE_YEAR, 9, 15),
         color: "text-purple-700",
         bgColor: "bg-purple-500",
         urgencyDays: 21,
@@ -475,8 +475,8 @@ const COOL_SEASON_TASKS: ScheduleTask[] = [
         key: "fall-fert-2026",
         label: "Fall Fertilization",
         description: "Heavy feeding to strengthen roots before winter",
-        startDate: new Date(YEAR, 8, 15),
-        endDate: new Date(YEAR, 9, 31),
+        startDate: new Date(SCHEDULE_TEMPLATE_YEAR, 8, 15),
+        endDate: new Date(SCHEDULE_TEMPLATE_YEAR, 9, 31),
         color: "text-blue-700",
         bgColor: "bg-blue-500",
         urgencyDays: 14,
@@ -486,8 +486,8 @@ const COOL_SEASON_TASKS: ScheduleTask[] = [
         key: "winterizer-2026",
         label: "Winterizer Application",
         description: "Final fertilization — promotes root storage for spring",
-        startDate: new Date(YEAR, 10, 1),
-        endDate: new Date(YEAR, 10, 30),
+        startDate: new Date(SCHEDULE_TEMPLATE_YEAR, 10, 1),
+        endDate: new Date(SCHEDULE_TEMPLATE_YEAR, 10, 30),
         color: "text-blue-700",
         bgColor: "bg-blue-400",
         urgencyDays: 14,
@@ -495,16 +495,28 @@ const COOL_SEASON_TASKS: ScheduleTask[] = [
     },
 ];
 
-/** Get the schedule tasks for a given grass type */
-export function getScheduleTasks(grassType: GrassType = "bermuda"): ScheduleTask[] {
+function moveTaskToYear(task: ScheduleTask, year: number): ScheduleTask {
+    const baseKey = task.key.replace(/-\d{4}$/, "");
+
+    return {
+        ...task,
+        key: `${baseKey}-${year}`,
+        startDate: new Date(year, task.startDate.getMonth(), task.startDate.getDate()),
+        endDate: new Date(year, task.endDate.getMonth(), task.endDate.getDate()),
+    };
+}
+
+/** Get the schedule tasks for a given grass type and calendar year. */
+export function getScheduleTasks(
+    grassType: GrassType = "bermuda",
+    year: number = new Date().getFullYear(),
+): ScheduleTask[] {
     const info = getGrassTypeInfo(grassType);
+    const templateTasks = info.season === "cool"
+        ? COOL_SEASON_TASKS
+        : WARM_SEASON_TASKS[grassType] ?? WARM_SEASON_TASKS["bermuda"];
 
-    if (info.season === "cool") {
-        return COOL_SEASON_TASKS;
-    }
-
-    // Warm-season: use specific schedule if available, otherwise fall back to bermuda
-    return WARM_SEASON_TASKS[grassType] ?? WARM_SEASON_TASKS["bermuda"];
+    return templateTasks.map((task) => moveTaskToYear(task, year));
 }
 
 export function getCompletedScheduleTaskKeys(
@@ -555,7 +567,7 @@ export function getScheduleTaskCompletionInfo(
 }
 
 // Keep backward compat — the old export that some pages may still reference
-export const SCHEDULE_TASKS: ScheduleTask[] = WARM_SEASON_TASKS["bermuda"];
+export const SCHEDULE_TASKS: ScheduleTask[] = getScheduleTasks("bermuda");
 
 // ── Next Step Logic ──────────────────────────────────────────
 
@@ -569,7 +581,7 @@ export function getNextStep(
     isUrgent: boolean;
     daysUntil: number;
 } {
-    const tasks = getScheduleTasks(grassType);
+    const tasks = getScheduleTasks(grassType, today.getFullYear());
     const completed = new Set(completedTaskKeys);
 
     for (const task of tasks) {

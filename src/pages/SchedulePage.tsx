@@ -6,11 +6,11 @@ import { BottomNav } from "@/components/BottomNav";
 import { getScheduleTasks, getGrassTypeInfo, getFertilizationNote, getScheduleTaskCompletionInfo, formatDate } from "@/lib/lawnLogic";
 import { CheckCircle2 } from "lucide-react";
 
-const YEAR = 2026;
+const TODAY = new Date();
+const YEAR = TODAY.getFullYear();
 const YEAR_START = new Date(YEAR, 0, 1);
 const YEAR_END = new Date(YEAR, 11, 31);
 const YEAR_MS = YEAR_END.getTime() - YEAR_START.getTime();
-const TODAY = new Date();
 
 function toPercent(date: Date): number {
     return Math.max(0, Math.min(100, ((date.getTime() - YEAR_START.getTime()) / YEAR_MS) * 100));
@@ -29,7 +29,7 @@ export function SchedulePage() {
     const { user } = useAuth();
     const grassType = useGrassType();
     const grassInfo = getGrassTypeInfo(grassType);
-    const scheduleTasks = getScheduleTasks(grassType);
+    const scheduleTasks = getScheduleTasks(grassType, YEAR);
     const fertNote = getFertilizationNote(grassType);
 
     const { data: explicitCompletions = [] } = useQuery({
@@ -50,8 +50,9 @@ export function SchedulePage() {
         queryFn: async () => {
             const { data } = await supabase
                 .from("activities")
-                .select("type,date")
-                .eq("user_id", user!.id);
+                .select("*")
+                .eq("user_id", user!.id)
+                .order("date", { ascending: false });
             return data ?? [];
         },
         enabled: !!user,
@@ -64,7 +65,7 @@ export function SchedulePage() {
         <div className="min-h-screen bg-gray-50">
             {/* Header */}
             <div className="bg-lawn-green-700 px-5 pt-12 pb-5">
-                <h1 className="text-white text-2xl font-bold">2026 Season Schedule</h1>
+                <h1 className="text-white text-2xl font-bold">{YEAR} Season Schedule</h1>
                 <p className="text-lawn-green-200 text-sm mt-0.5">
                     {grassInfo.emoji} {grassInfo.name} — {grassInfo.season === "warm" ? "warm" : "cool"}-season calendar
                 </p>

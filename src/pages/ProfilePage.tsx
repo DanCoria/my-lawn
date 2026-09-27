@@ -5,6 +5,7 @@ import { useLawnProfile } from "@/contexts/LawnProfileContext";
 import { GRASS_TYPES, getGrassTypeInfo } from "@/lib/lawnLogic";
 import { BottomNav } from "@/components/BottomNav";
 import type { GrassType } from "@/types/database";
+import type { GeocodingResult } from "@/types/geocoding";
 import {
     User,
     Leaf,
@@ -45,7 +46,7 @@ export function ProfilePage() {
     const [searchQuery, setSearchQuery] = useState("");
     const [searching, setSearching] = useState(false);
     const [searchError, setSearchError] = useState<string | null>(null);
-    const [searchResults, setSearchResults] = useState<any[]>([]);
+    const [searchResults, setSearchResults] = useState<GeocodingResult[]>([]);
     const [locationSaving, setLocationSaving] = useState(false);
     const [locationSuccess, setLocationSuccess] = useState(false);
 
@@ -125,7 +126,7 @@ export function ProfilePage() {
         );
     };
 
-    const handleSelectResult = (result: any) => {
+    const handleSelectResult = (result: GeocodingResult) => {
         const lat = Math.round(result.latitude * 100) / 100;
         const lon = Math.round(result.longitude * 100) / 100;
         setCoordinates({ lat, lon });
