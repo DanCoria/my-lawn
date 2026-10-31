@@ -24,6 +24,7 @@ The product should feel like a calm, transparent coach. It should not feel like 
 - Use follow-up photos and observable changes to show progress.
 - Preserve current seasonal guidance, scan history, and manual activity history in a simpler information architecture.
 - Establish the free scan policy needed for the guest and personalized experience.
+- Bound AI usage with independent application and provider-level cost controls so no public route can create open-ended Gemini spend.
 
 ## Success criteria
 
@@ -276,6 +277,71 @@ The server stores authoritative period boundaries. The UI displays the remaining
 
 Enforcement must be server-side and atomic so concurrent requests cannot bypass limits. A usage event is reserved before AI work and finalized only after a usable result. Failed work releases or refunds the reservation.
 
+## Mandatory AI cost and abuse controls
+
+These controls are release blockers for any public Guest Preview or personalized diagnosis. User allowances alone are not sufficient because anonymous-session churn, bugs, retries, or direct Edge Function calls can bypass assumptions made by the UI.
+
+### Provider-level spend boundary
+
+- Run the My Lawn Gemini workload in a dedicated Google Cloud project so unrelated services and applications cannot consume or obscure its cap.
+- Configure a **$10 monthly project spend cap** for the Gemini API before enabling the public flow.
+- If an AI Studio project cap is unavailable, use an enforceable Google Cloud spend-cap budget scoped to the Gemini API service and dedicated project. If neither can be verified, public Guest Preview and paid-tier Gemini usage remain disabled.
+- Enable spend notifications at 50%, 80%, and 100% where available.
+- Treat the provider cap as the last line of defense, not the primary limiter, because provider billing and cap enforcement can lag and allow a small overage.
+- Raising the cap is an explicit operational decision supported by observed usage and unit-cost data; the application never raises it automatically.
+
+### Application-wide limits
+
+- Default to **100 upstream Gemini calls per UTC day** across all guest and permanent users.
+- Within that total, default to no more than **50 Guest Preview calls per UTC day** so anonymous traffic cannot starve signed-in users.
+- Store limits in server-only configuration and enforce them atomically before any Gemini request.
+- When a global or guest limit is reached, return a friendly temporary-unavailability response, do not call Gemini, and do not consume the user's personal allowance.
+- Include a server-only emergency kill switch that disables every new Gemini request immediately while preserving access to saved scans, plans, and progress.
+
+### Per-request controls
+
+- Require a valid Supabase JWT and verify the current user inside the Edge Function. Guest traffic uses a Supabase anonymous JWT; an API key by itself is insufficient.
+- Require a unique idempotency key for every logical scan. Repeated requests with the same key return the existing reservation or result and never create a second Gemini call.
+- Allow at most one in-flight diagnosis per user identity.
+- Do not automatically retry an upstream Gemini request. A user-visible retry reuses the logical request where safe or creates a new explicitly accounted request only after the previous reservation is finalized.
+- Validate decoded image bytes, MIME type, and dimensions on the server. Initial defaults are a 3 MB decoded-image maximum and a 1,600-pixel maximum dimension.
+- Restrict browser CORS origins to the production domain and approved local-development origins. CORS is defense in depth and does not replace authentication or rate limiting.
+
+### Model and token controls
+
+- Use the currently supported cost-efficient Flash-Lite model for Guest Preview and the supported Flash model for personalized and follow-up diagnosis. Verify exact stable model identifiers and pricing immediately before implementation and release.
+- Disable model thinking initially (`thinkingBudget: 0` for Gemini 2.5 models) unless evaluation demonstrates a material diagnosis-quality need. Any later increase must use a small fixed budget, be measured, and remain within the provider and application caps.
+- Set strict structured JSON output and hard output limits. Initial targets are 700 output tokens for Guest Preview and 1,500 for personalized or follow-up diagnosis.
+- Keep prompts bounded. Do not send unbounded activity history, scan history, or image collections to the model.
+- Follow-up comparison uses only the minimum required images and context.
+
+### Guest abuse controls
+
+- Use Cloudflare Turnstile as the initial bot challenge and require one successful challenge when the anonymous Supabase session is created. Supabase anonymous-sign-in CAPTCHA enforcement must be enabled, so callers cannot create a valid guest session through an unprotected alternate route. Do not show two separate CAPTCHA challenges for one Guest Preview.
+- Apply a privacy-conscious network-level rate limit in addition to the one-preview-per-anonymous-identity rule. The initial default is three Guest Preview attempts per normalized network address in a rolling 24-hour window. Clearing browser storage or creating a new anonymous identity must not provide unlimited previews from the same abusive source.
+- When a shared network reaches the guest limit, offer permanent-account sign-in or signup and explain that Guest Preview is temporarily unavailable. Do not weaken the network limit or silently call Gemini.
+- Do not rely on device fingerprinting as the sole control.
+- Periodically clean up abandoned anonymous users and their usage reservations.
+
+### Ambiguous requests and circuit breaking
+
+- Increment the global and route-level call counters immediately before sending the provider request; never decrement those counters when a request fails, times out, or has an unknown outcome.
+- A provider request that times out without a saved result enters `unknown` state. It does not consume the user's personal scan allowance, but it does count against global cost limits.
+- Do not retry an `unknown` request automatically. After a two-minute reservation timeout, the user may explicitly retry with a new accounted upstream call. The prior usage event remains preserved for cost reporting and reconciliation.
+- Open the automatic circuit breaker for 15 minutes after either 10 consecutive upstream failures or a greater-than-50% failure rate across the latest 20 upstream calls. While open, no new Gemini calls are made and no personal allowances are consumed.
+- The hard daily limits and provider spend cap still apply regardless of circuit-breaker state.
+
+### Usage metering and operations
+
+- Persist the model identifier, input tokens, visible output tokens, thinking tokens, total tokens, request status, allowance source, idempotency key, and timestamps for every upstream request.
+- Calculate an estimated request cost from server-owned price configuration for operational reporting. Provider billing remains authoritative.
+- Provide a simple operational query or dashboard for calls and estimated cost by day, route, model, and outcome.
+- Log and alert on unusual bursts, repeated failures, idempotency conflicts, and rapid anonymous-account creation.
+- Direct provider budget alerts to the dedicated project's owner/billing administrator. Application anomaly records must be visible in the operational query even when no external alert integration is configured.
+- If usage metadata is missing from an otherwise successful provider response, count the request against request limits and flag it for review rather than treating it as free.
+
+The cost-safety order is: personal allowance → per-user concurrency/idempotency → guest/network limit → global daily limit → emergency kill switch → Gemini project spend cap. No single layer is expected to carry the entire risk.
+
 ## Diagnosis contract
 
 New diagnosis responses use a versioned contract with at least:
@@ -349,6 +415,7 @@ Only server-side code may reserve or finalize allowance. The frontend may read a
 - The browser resizes photos as it does today.
 - Guest Preview begins with `signInAnonymously()` and sends the resulting JWT to the Edge Function.
 - The Edge Function validates the current user and anonymous/permanent state, reserves allowance atomically, calls the AI provider, validates the response, and finalizes usage.
+- Before the provider call, the Edge Function also enforces the emergency switch, global and guest daily limits, per-user in-flight rule, idempotency, CAPTCHA state for guests, and server-side image constraints.
 - Guest images remain browser-local until permanent-account conversion.
 - Permanent scan images use the existing private bucket and signed URLs.
 - Rescue-plan creation uses validated diagnosis output and explicit server-owned defaults; users can start or decline the plan.
@@ -377,6 +444,7 @@ Relevant current Supabase guidance:
 
 - **Unusable photo:** show specific retake instructions; consume no allowance.
 - **AI or network failure:** preserve the selected photo in the active flow, allow retry, and consume no allowance.
+- **Global cost limit or emergency stop:** explain that scanning is temporarily unavailable, preserve all saved product functionality, and consume no personal allowance.
 - **Guest allowance used:** offer account creation or sign-in; do not run another guest analysis.
 - **Personalized allowance exhausted:** show the next reset date while retaining full access to saved plans and progress.
 - **Profile incomplete:** collect only the missing context needed for personalization.
@@ -413,11 +481,17 @@ Relevant current Supabase guidance:
 - primary-case selection rules;
 - reminder derivation;
 - allowance selection, reset, reservation, finalization, and refund rules;
+- global and guest daily-limit accounting;
+- idempotency, one-in-flight enforcement, and kill-switch behavior;
+- token and estimated-cost recording;
 - progress outcome presentation.
 
 ### Integration tests
 
 - Guest Preview success, unusable image, retry, and exhausted allowance;
+- direct Edge Function calls without a valid user JWT and guest CAPTCHA proof being rejected before Gemini;
+- duplicate submissions producing one upstream call;
+- oversized or invalid images being rejected before Gemini;
 - anonymous-to-permanent conversion preserving the user ID and active flow;
 - profile completion leading to personalized diagnosis and plan creation;
 - Today showing exactly one ready action;
@@ -434,6 +508,8 @@ Relevant current Supabase guidance:
 
 - RLS tests for anonymous users, permanent users, and cross-user access denial;
 - atomic concurrent allowance-reservation test;
+- atomic global-cap and guest-cap tests, including the 101st total call and 51st guest call being blocked before Gemini;
+- kill-switch test proving zero new upstream calls while saved data remains usable;
 - storage ownership and signed-URL tests;
 - anonymous account cleanup procedure;
 - database and security advisors before committing the final migration.
@@ -446,6 +522,10 @@ Relevant current Supabase guidance:
 - No product brand is emitted by the new diagnosis contract or rendered by the new UI.
 - A failed or unusable scan does not decrement allowance.
 - There is never more than one primary active or monitoring plan for a user.
+- The provider project has a verified $10 monthly Gemini spend cap before public Guest Preview is enabled.
+- Application defaults enforce at most 100 total and 50 guest upstream calls per UTC day.
+- Every provider call has usage metadata or a flagged missing-metadata record.
+- Default model configuration has bounded output and disabled thinking unless a measured exception is documented.
 
 ## Builder calls intentionally left open
 
