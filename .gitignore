@@ -26,3 +26,6 @@ npm-debug.log*
 # Supabase local
 .supabase/
 supabase/.temp/
+
+# Local Superpowers brainstorming artifacts
+.superpowers/
