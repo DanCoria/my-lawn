@@ -34,6 +34,52 @@ export interface LawnScan {
     created_at: string;
 }
 
+export type AiUsageStatus =
+    | "reserved"
+    | "started"
+    | "completed"
+    | "failed"
+    | "unusable"
+    | "unknown";
+
+export type ScanAllowanceSource = "guest" | "welcome" | "monthly";
+
+export interface ScanEntitlement {
+    user_id: string;
+    tier: "free";
+    welcome_started_at: string;
+    welcome_limit: number;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface AiUsageEvent {
+    id: string;
+    user_id: string;
+    request_key: string;
+    route: "guest_preview" | "personalized" | "follow_up";
+    allowance_source: ScanAllowanceSource;
+    status: AiUsageStatus;
+    scan_id: string | null;
+    model: string | null;
+    input_tokens: number | null;
+    output_tokens: number | null;
+    thought_tokens: number | null;
+    total_tokens: number | null;
+    error_code: string | null;
+    started_at: string | null;
+    finalized_at: string | null;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface AllowanceSummary {
+    source: ScanAllowanceSource;
+    remaining: number;
+    reset_at: string | null;
+    in_flight: boolean;
+}
+
 // ── Grass types & user profiles ──────────────────────────────
 
 export type GrassType =
