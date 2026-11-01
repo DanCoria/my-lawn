@@ -107,6 +107,7 @@ describe("diagnosis contract", () => {
                 output_tokens: 80,
                 thought_tokens: 0,
                 total_tokens: 330,
+                metadata_complete: true,
             }),
         ).toBe(true);
         expect(
@@ -116,6 +117,7 @@ describe("diagnosis contract", () => {
                 output_tokens: -1,
                 thought_tokens: 0,
                 total_tokens: 249,
+                metadata_complete: true,
             }),
         ).toBe(false);
     });

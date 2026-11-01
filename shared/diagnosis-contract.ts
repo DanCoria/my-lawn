@@ -67,6 +67,7 @@ export interface AiUsageSummary {
     output_tokens: number;
     thought_tokens: number;
     total_tokens: number;
+    metadata_complete: boolean;
 }
 
 type UnknownRecord = Record<string, unknown>;
@@ -292,11 +293,13 @@ export function isAiUsageSummary(value: unknown): value is AiUsageSummary {
             "output_tokens",
             "thought_tokens",
             "total_tokens",
+            "metadata_complete",
         ]) &&
         isNonEmptyString(value.model) &&
         isNonNegativeInteger(value.input_tokens) &&
         isNonNegativeInteger(value.output_tokens) &&
         isNonNegativeInteger(value.thought_tokens) &&
-        isNonNegativeInteger(value.total_tokens)
+        isNonNegativeInteger(value.total_tokens) &&
+        typeof value.metadata_complete === "boolean"
     );
 }
