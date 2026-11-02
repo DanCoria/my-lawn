@@ -168,7 +168,14 @@ describe("Gemini diagnosis client", () => {
     });
 
     test("invalid_json_is_provider_failure", async () => {
-        const fake = createFakeTransport([{ text: "not-json" }]);
+        const fake = createFakeTransport([{
+            text: "not-json",
+            usageMetadata: {
+                promptTokenCount: 12,
+                candidatesTokenCount: 3,
+                totalTokenCount: 15,
+            },
+        }]);
 
         await expect(
             createClient(fake.transport).analyze({
@@ -180,6 +187,33 @@ describe("Gemini diagnosis client", () => {
         ).rejects.toMatchObject({
             name: "GeminiProviderError",
             code: "invalid_json",
+            outcomeUnknown: false,
+            usage: {
+                model: "gemini-2.5-flash-lite",
+                input_tokens: 12,
+                output_tokens: 3,
+                thought_tokens: 0,
+                total_tokens: 15,
+                metadata_complete: true,
+            },
+        });
+    });
+
+    test("transport_error_is_ambiguous_and_has_explicit_missing_usage", async () => {
+        const client = createClient(async () => { throw new TypeError("connection reset"); });
+
+        await expect(client.analyze({
+            route: "guest_preview",
+            imageBase64: "image",
+            mimeType: "image/jpeg",
+            context: {},
+        })).rejects.toMatchObject({
+            code: "transport_error",
+            outcomeUnknown: true,
+            usage: {
+                model: "gemini-2.5-flash-lite",
+                metadata_complete: false,
+            },
         });
     });
 

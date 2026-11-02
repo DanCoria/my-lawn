@@ -79,12 +79,22 @@ export type GeminiProviderErrorCode =
 export class GeminiProviderError extends Error {
     readonly code: GeminiProviderErrorCode;
     readonly cause?: unknown;
+    readonly usage?: AiUsageSummary;
+    readonly outcomeUnknown: boolean;
 
-    constructor(code: GeminiProviderErrorCode, message: string, cause?: unknown) {
+    constructor(
+        code: GeminiProviderErrorCode,
+        message: string,
+        cause?: unknown,
+        usage?: AiUsageSummary,
+        outcomeUnknown = false,
+    ) {
         super(message);
         this.name = "GeminiProviderError";
         this.code = code;
         this.cause = cause;
+        this.usage = usage;
+        this.outcomeUnknown = outcomeUnknown;
     }
 }
 
@@ -326,22 +336,48 @@ export function createGeminiDiagnosisClient(
                     },
                 });
             } catch (error) {
-                if (error instanceof GeminiProviderError) throw error;
+                const missingUsage = extractUsage(model, undefined);
+                if (error instanceof GeminiProviderError) {
+                    throw new GeminiProviderError(
+                        error.code,
+                        error.message,
+                        error.cause ?? error,
+                        error.usage ?? missingUsage,
+                        error.code === "transport_error" || error.outcomeUnknown,
+                    );
+                }
                 throw new GeminiProviderError(
                     "transport_error",
                     "Gemini diagnosis request failed",
                     error,
+                    missingUsage,
+                    true,
                 );
             }
 
-            const diagnosis = parseDiagnosis(response.text);
             const usage = extractUsage(model, response.usageMetadata);
+            let diagnosis: unknown;
+            try {
+                diagnosis = parseDiagnosis(response.text);
+            } catch (error) {
+                if (error instanceof GeminiProviderError) {
+                    throw new GeminiProviderError(
+                        error.code,
+                        error.message,
+                        error.cause,
+                        usage,
+                    );
+                }
+                throw error;
+            }
 
             if (isGuest) {
                 if (!isGuestDiagnosisPreview(diagnosis)) {
                     throw new GeminiProviderError(
                         "invalid_contract",
                         "Gemini returned an invalid Guest Preview contract",
+                        undefined,
+                        usage,
                     );
                 }
 
@@ -352,6 +388,8 @@ export function createGeminiDiagnosisClient(
                 throw new GeminiProviderError(
                     "invalid_contract",
                     "Gemini returned an invalid personalized diagnosis contract",
+                    undefined,
+                    usage,
                 );
             }
 

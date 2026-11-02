@@ -66,6 +66,10 @@ export interface AiUsageEvent {
     output_tokens: number | null;
     thought_tokens: number | null;
     total_tokens: number | null;
+    usage_metadata_complete: boolean | null;
+    response_payload: import("@shared/diagnosis-contract").GuestDiagnosisPreview
+        | import("@shared/diagnosis-contract").DiagnosisV2
+        | null;
     error_code: string | null;
     started_at: string | null;
     finalized_at: string | null;
