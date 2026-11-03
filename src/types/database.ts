@@ -25,6 +25,72 @@ export interface TaskCompletion {
 
 export type ActivityInsert = Omit<Activity, "id" | "user_id" | "created_at">;
 
+export type LawnCaseStatus =
+    | "observation"
+    | "active"
+    | "monitoring"
+    | "paused"
+    | "resolved"
+    | "archived";
+
+export interface LawnCase {
+    id: string;
+    user_id: string;
+    status: LawnCaseStatus;
+    is_primary: boolean;
+    title: string;
+    area_label: string | null;
+    likely_cause: string | null;
+    confidence: "low" | "medium" | "high" | null;
+    diagnosis: import("@shared/diagnosis-contract").DiagnosisV2;
+    plan_seed: import("@shared/diagnosis-contract").PlanSeed;
+    resolved_at: string | null;
+    created_at: string;
+    updated_at: string;
+}
+
+export type PlanStepKind = "action" | "check";
+export type PlanStepStatus = "locked" | "ready" | "done" | "postponed" | "skipped";
+
+export interface PlanStepCheckOption {
+    value: string;
+    label: string;
+    next_order?: number;
+}
+
+export interface PlanStep {
+    id: string;
+    case_id: string;
+    user_id: string;
+    step_order: number;
+    stage: string;
+    kind: PlanStepKind;
+    title: string;
+    rationale: string | null;
+    instructions: string;
+    estimated_effort_minutes: number | null;
+    delay_days: number;
+    follow_up_days: number | null;
+    not_before_at: string | null;
+    due_at: string | null;
+    weather_constraints: Record<string, unknown> | null;
+    check_options: PlanStepCheckOption[] | null;
+    status: PlanStepStatus;
+    result: string | null;
+    completed_at: string | null;
+    postponed_at: string | null;
+    created_at: string;
+    updated_at: string;
+}
+
+export type ScanPurpose = "initial" | "follow_up" | "observation";
+export type ScanComparisonStatus =
+    | "improving"
+    | "unchanged"
+    | "worsening"
+    | "resolved"
+    | "unable";
+
 export interface LawnScan {
     id: string;
     user_id: string;
@@ -32,6 +98,11 @@ export interface LawnScan {
     storage_path: string | null;
     diagnosis: import("@/lib/gemini").Diagnosis
         | import("@shared/diagnosis-contract").DiagnosisV2;
+    case_id: string | null;
+    purpose: ScanPurpose | null;
+    diagnosis_schema_version: number | null;
+    comparison_status: ScanComparisonStatus | null;
+    comparison_summary: string | null;
     created_at: string;
 }
 
