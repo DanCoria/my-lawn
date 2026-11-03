@@ -9,7 +9,7 @@ interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({ children, skipOnboardingCheck = false }: ProtectedRouteProps) {
-    const { user, loading: authLoading } = useAuth();
+    const { user, sessionKind, loading: authLoading } = useAuth();
     const { needsOnboarding, loading: profileLoading } = useLawnProfile();
 
     if (authLoading || profileLoading) {
@@ -23,7 +23,7 @@ export function ProtectedRoute({ children, skipOnboardingCheck = false }: Protec
         );
     }
 
-    if (!user) {
+    if (!user || sessionKind !== "permanent") {
         return <Navigate to="/login" replace />;
     }
 

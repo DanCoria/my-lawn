@@ -144,6 +144,8 @@ describe("AuthProvider guest conversion operations", () => {
 
         expect(authMocks.updateUser).toHaveBeenCalledWith({
             email: "new@example.com",
+        }, {
+            emailRedirectTo: "http://localhost:3000/auth/convert",
         });
     });
 

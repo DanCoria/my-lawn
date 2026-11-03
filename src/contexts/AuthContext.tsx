@@ -81,7 +81,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (sessionKind !== "anonymous") {
             throw new Error("Email linking requires an active guest session.");
         }
-        const { error } = await supabase.auth.updateUser({ email });
+        const { error } = await supabase.auth.updateUser(
+            { email },
+            { emailRedirectTo: `${window.location.origin}/auth/convert` },
+        );
         if (error) throw error;
     };
 
