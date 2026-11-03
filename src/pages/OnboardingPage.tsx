@@ -1,6 +1,13 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { isDiagnosisV2, type DiagnosisV2 } from "@shared/diagnosis-contract";
+import { useAuth } from "@/contexts/AuthContext";
 import { useLawnProfile } from "@/contexts/LawnProfileContext";
+import { runPersonalizedDiagnosis } from "@/features/diagnosis/api";
+import { DiagnosisResult } from "@/features/diagnosis/DiagnosisResult";
+import { clearGuestDraft, loadGuestDraft, type GuestDraft } from "@/features/guest/guestDraft";
+import { createObservationFromDiagnosis, startPrimaryPlan } from "@/features/plans/createPlan";
+import { resizeImageForAI, type DiagnosisSymptom } from "@/lib/gemini";
 import { GRASS_TYPES, getGrassTypeInfo } from "@/lib/lawnLogic";
 import type { GrassType, GrassTypeInfo } from "@/types/database";
 import type { GeocodingResult } from "@/types/geocoding";
@@ -77,14 +84,30 @@ function GrassCard({
 
 export function OnboardingPage() {
     const navigate = useNavigate();
+    const { user, sessionKind } = useAuth();
     const { completeOnboarding } = useLawnProfile();
 
     const [step, setStep] = useState<Step>("welcome");
     const [selectedGrass, setSelectedGrass] = useState<GrassType | null>(null);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [guestDraft, setGuestDraft] = useState<GuestDraft | null>(null);
+    const [personalizedDiagnosis, setPersonalizedDiagnosis] = useState<DiagnosisV2 | null>(null);
+    const [savedCaseId, setSavedCaseId] = useState<string | null>(null);
 
-    // Scan state
+    useEffect(() => {
+        let active = true;
+        loadGuestDraft()
+            .then((draft) => {
+                if (active) setGuestDraft(draft);
+            })
+            .catch(() => {
+                if (active) setGuestDraft(null);
+            });
+        return () => {
+            active = false;
+        };
+    }, []);
 
     // Location step state
     const [detectingLocation, setDetectingLocation] = useState(false);
@@ -206,20 +229,124 @@ export function OnboardingPage() {
             const locData = locationResolved && coordinates
                 ? { lat: coordinates.lat, lon: coordinates.lon, zipCode, name: locationName }
                 : null;
+
+            if (!guestDraft) {
+                await completeOnboarding(selectedGrass, locData);
+                if (locData) {
+                    localStorage.setItem("my-lawn-location", JSON.stringify({ lat: locData.lat, lon: locData.lon }));
+                }
+                navigate("/", { replace: true });
+                return;
+            }
+            if (!user || sessionKind !== "permanent") {
+                throw new Error("Sign in to a permanent account before saving your personalized lawn guidance.");
+            }
+
+            const savedPhoto = new File(
+                [guestDraft.image],
+                "guest-lawn-preview.jpg",
+                { type: guestDraft.image.type || "image/jpeg" },
+            );
+            const imageBase64 = await resizeImageForAI(savedPhoto);
+            let requestId = crypto.randomUUID();
+            while (requestId === guestDraft.requestId) requestId = crypto.randomUUID();
+            const allowedSymptoms = new Set<DiagnosisSymptom>(["brown", "weeds", "bare", "thin", "not_sure"]);
+            const symptom = allowedSymptoms.has(guestDraft.symptom as DiagnosisSymptom)
+                ? guestDraft.symptom as DiagnosisSymptom
+                : "not_sure";
+            const result = await runPersonalizedDiagnosis({
+                imageBase64,
+                mimeType: "image/jpeg",
+                requestId,
+                context: {
+                    symptom,
+                    grass_type: selectedGrass,
+                    location_name: locData?.name,
+                    latitude: locData?.lat,
+                    longitude: locData?.lon,
+                    date: new Date().toISOString().slice(0, 10),
+                },
+            });
+            if (!isDiagnosisV2(result.diagnosis) || !result.diagnosis.image_quality.usable) {
+                throw new Error("The personalized lawn diagnosis was not usable. Your saved preview is still available.");
+            }
+
             await completeOnboarding(selectedGrass, locData);
-            
             if (locData) {
                 localStorage.setItem("my-lawn-location", JSON.stringify({ lat: locData.lat, lon: locData.lon }));
             }
-            
+
+            const saved = await createObservationFromDiagnosis(
+                user.id,
+                result.diagnosis,
+                guestDraft.image,
+                { grassType: selectedGrass, locationName: locData?.name },
+            );
+            try {
+                await clearGuestDraft();
+                setGuestDraft(null);
+            } catch (clearError) {
+                console.error("The saved guest preview could not be cleared after persistence.", clearError);
+            }
+            setSavedCaseId(saved.caseId);
+            setPersonalizedDiagnosis(result.diagnosis);
+            setSaving(false);
+        } catch (err) {
+            const resetAt = err instanceof Error && "resetAt" in err
+                && typeof (err as Error & { resetAt?: unknown }).resetAt === "string"
+                ? (err as Error & { resetAt: string }).resetAt
+                : null;
+            const resetDate = resetAt && Number.isFinite(Date.parse(resetAt))
+                ? new Date(resetAt).toLocaleDateString(undefined, { month: "long", day: "numeric" })
+                : null;
+            setError(resetDate
+                ? `You’ve used your available lawn scans. Your saved lawn preview is safe. Try again after ${resetDate}.`
+                : err instanceof Error ? err.message : "Something went wrong");
+            setSaving(false);
+        }
+    };
+
+    const handleStartPlan = async () => {
+        if (!savedCaseId) return;
+        setSaving(true);
+        setError(null);
+        try {
+            await startPrimaryPlan(savedCaseId);
             navigate("/", { replace: true });
         } catch (err) {
-            setError(err instanceof Error ? err.message : "Something went wrong");
+            setError(err instanceof Error ? err.message : "The plan could not be started.");
             setSaving(false);
         }
     };
 
     const selectedInfo = selectedGrass ? getGrassTypeInfo(selectedGrass) : null;
+
+    if (personalizedDiagnosis && savedCaseId) {
+        return (
+            <main className="min-h-screen bg-gray-50 px-5 py-8">
+                <div className="mx-auto max-w-md space-y-4">
+                    <header>
+                        <p className="text-sm font-semibold text-lawn-green-700">Your lawn observation is saved</p>
+                        <h1 className="mt-1 text-2xl font-bold text-gray-900">Your personalized next step</h1>
+                    </header>
+                    <DiagnosisResult
+                        diagnosis={personalizedDiagnosis}
+                        mode="personalized"
+                        onStartPlan={handleStartPlan}
+                    />
+                    <button
+                        type="button"
+                        className="btn-secondary w-full"
+                        disabled={saving}
+                        onClick={() => navigate("/", { replace: true })}
+                    >
+                        Keep as observation
+                    </button>
+                    {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
+                </div>
+            </main>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-gradient-to-b from-lawn-green-800 via-lawn-green-900 to-lawn-green-950 relative overflow-hidden">
@@ -241,7 +368,9 @@ export function OnboardingPage() {
                             climate, and schedule.
                         </p>
                         <p className="text-lawn-green-400 text-center text-xs max-w-xs mb-10">
-                            Let's get set up — it only takes 30 seconds.
+                            {guestDraft
+                                ? "Your saved lawn preview is ready. Add two details to unlock personalized guidance."
+                                : "Let's get set up — it only takes 30 seconds."}
                         </p>
                         <button
                             id="onboarding-start-btn"

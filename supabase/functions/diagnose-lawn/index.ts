@@ -174,6 +174,7 @@ const handler = createDiagnoseHandler({
                 allowed: false,
                 reason: typeof result.reason === "string" ? result.reason : "reservation_rejected",
                 duplicate: result.duplicate === true,
+                resetAt: typeof result.reset_at === "string" ? result.reset_at : undefined,
             };
         }
         if (typeof result.event_id !== "string" || typeof result.allowance_source !== "string") {

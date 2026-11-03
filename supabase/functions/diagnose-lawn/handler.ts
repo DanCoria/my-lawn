@@ -37,7 +37,7 @@ export type ReservationResult =
           status?: string;
           existingDiagnosis?: GeminiDiagnosisResult["diagnosis"];
       }
-    | { allowed: false; reason: string; duplicate?: boolean };
+    | { allowed: false; reason: string; duplicate?: boolean; resetAt?: string };
 
 export interface RuntimeState {
     enabled: boolean;
@@ -296,7 +296,10 @@ export function createDiagnoseHandler(deps: DiagnoseHandlerDependencies) {
             return response(origin, 503, { error: "temporarily_unavailable" });
         }
         if (!reservation.allowed) {
-            return response(origin, reservationStatus(reservation.reason), { error: reservation.reason });
+            return response(origin, reservationStatus(reservation.reason), {
+                error: reservation.reason,
+                ...(reservation.resetAt ? { reset_at: reservation.resetAt } : {}),
+            });
         }
         if (reservation.duplicate) {
             if (reservation.status === "completed" && reservation.existingDiagnosis) {

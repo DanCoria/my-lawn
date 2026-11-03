@@ -123,6 +123,18 @@ describe("browser diagnosis API", () => {
         expect(error.message).not.toContain("Gemini");
     });
 
+    test("exposes_only_the_validated_allowance_reset_time", async () => {
+        vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({
+            error: "personal_allowance_exhausted",
+            reset_at: "2026-11-30T15:00:00.000Z",
+        }, 429));
+        const error = await diagnoseLawn(request).catch((caught) => caught);
+        expect(error).toMatchObject({
+            code: "personal_allowance_exhausted",
+            resetAt: "2026-11-30T15:00:00.000Z",
+        });
+    });
+
     test("rejects_invalid_success_json_with_a_safe_error", async () => {
         vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ diagnosis: { surprise: true } }));
 

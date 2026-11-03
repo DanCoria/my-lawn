@@ -27,7 +27,7 @@ export function ConvertAccountPage({ manualLinkingEnabled = import.meta.env.VITE
                 setMessage("Check your email for the verification link. Your preview will remain in this browser.");
             } else {
                 await signIntoExistingAccount(email, password);
-                setMessage("Signed in. Continue to profile setup to personalize your diagnosis.");
+                setMessage("Signed in. Your personalized diagnosis will use this signed-in account's available scan and will be saved only to this account.");
             }
         } catch (caught) {
             const text = caught instanceof Error ? caught.message : "Account conversion could not be completed.";

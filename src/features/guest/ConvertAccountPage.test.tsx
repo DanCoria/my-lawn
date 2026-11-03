@@ -35,6 +35,7 @@ describe("ConvertAccountPage", () => {
         fireEvent.change(screen.getByLabelText(/^password$/i), { target: { value: "password123" } });
         fireEvent.click(screen.getByRole("button", { name: /sign in and continue/i }));
         await screen.findByRole("link", { name: /continue to profile setup/i });
+        expect(screen.getByText(/signed-in account's available scan/i)).toBeTruthy();
         expect(mocks.signIn).toHaveBeenCalledWith("owner@example.com", "password123");
         expect(mocks.clear).not.toHaveBeenCalled();
     });

@@ -221,6 +221,22 @@ describe("diagnose-lawn handler", () => {
         expect(deps.calls.provider).toBe(0);
     });
 
+    test("returns_the_server_owned_allowance_reset_time", async () => {
+        const deps = createDeps({
+            reserve: async () => ({
+                allowed: false,
+                reason: "personal_allowance_exhausted",
+                resetAt: "2026-11-30T15:00:00.000Z",
+            }),
+        });
+        const response = await createDiagnoseHandler(deps)(jsonRequest());
+        expect(response.status).toBe(429);
+        await expect(response.json()).resolves.toEqual({
+            error: "personal_allowance_exhausted",
+            reset_at: "2026-11-30T15:00:00.000Z",
+        });
+    });
+
     test.each([
         [{ enabled: false, circuitOpenUntil: null }],
         [{ enabled: true, circuitOpenUntil: "2026-11-01T12:15:00.000Z" }],

@@ -71,13 +71,15 @@ export class DiagnosisApiError extends Error {
     readonly code: string;
     readonly status: number;
     readonly retryable: boolean;
+    readonly resetAt: string | null;
 
-    constructor(code: string, status: number, retryable: boolean, message: string) {
+    constructor(code: string, status: number, retryable: boolean, message: string, resetAt: string | null = null) {
         super(message);
         this.name = "DiagnosisApiError";
         this.code = code;
         this.status = status;
         this.retryable = retryable;
+        this.resetAt = resetAt;
     }
 }
 
@@ -85,13 +87,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function safeApiError(code: string, status: number): DiagnosisApiError {
+function safeApiError(code: string, status: number, resetAt: string | null = null): DiagnosisApiError {
     if (code === "personal_allowance_exhausted") {
         return new DiagnosisApiError(
             code,
             status,
             false,
             "You’ve used your available lawn scans. Your next scan will be available after your allowance resets.",
+            resetAt,
         );
     }
     if (["network_limit_exhausted", "global_limit_exhausted", "guest_global_limit_exhausted"].includes(code)) {
@@ -193,13 +196,19 @@ export async function diagnoseLawn(
 
     if (!response.ok) {
         let code = "request_failed";
+        let resetAt: string | null = null;
         try {
             const body: unknown = await response.json();
-            if (isRecord(body) && typeof body.error === "string") code = body.error;
+            if (isRecord(body)) {
+                if (typeof body.error === "string") code = body.error;
+                if (typeof body.reset_at === "string" && Number.isFinite(Date.parse(body.reset_at))) {
+                    resetAt = body.reset_at;
+                }
+            }
         } catch {
             // The browser receives only the safe status-based fallback below.
         }
-        throw safeApiError(code, response.status);
+        throw safeApiError(code, response.status, resetAt);
     }
 
     let body: unknown;
