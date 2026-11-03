@@ -4,7 +4,8 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import { useGrassType } from "@/contexts/LawnProfileContext";
 import { BottomNav } from "@/components/BottomNav";
-import { diagnoseLawn, resizeImageForAI, Diagnosis } from "@/lib/gemini";
+import { diagnoseLawn, getRetakeGuidance, resizeImageForAI, Diagnosis } from "@/lib/gemini";
+import { isDiagnosisV2, type DiagnosisV2 } from "@shared/diagnosis-contract";
 import { getGrassTypeInfo } from "@/lib/lawnLogic";
 import { LawnScan } from "@/types/database";
 import {
@@ -56,7 +57,42 @@ function ScoreRing({ score }: { score: number }) {
     );
 }
 
-function DiagnosisResult({ diagnosis, imageUrl }: { diagnosis: Diagnosis; imageUrl: string }) {
+type DisplayDiagnosis = Diagnosis | DiagnosisV2;
+
+function DiagnosisResult({ diagnosis, imageUrl }: { diagnosis: DisplayDiagnosis; imageUrl: string }) {
+    if (isDiagnosisV2(diagnosis)) {
+        return (
+            <div className="space-y-4 animate-slide-up">
+                <div className="card p-4 flex items-center gap-4">
+                    {imageUrl && (
+                        <img src={imageUrl} alt="Scanned lawn" className="w-16 h-16 rounded-xl object-cover flex-shrink-0" />
+                    )}
+                    <div className="flex-1 min-w-0">
+                        <p className="text-xs text-gray-400 font-medium uppercase tracking-wide mb-1">Likely cause</p>
+                        <p className="font-bold text-gray-900 text-lg leading-tight">{diagnosis.likely_cause}</p>
+                        <p className="text-xs text-gray-500 mt-1 leading-relaxed">{diagnosis.summary}</p>
+                        <p className="text-xs text-lawn-green-700 mt-2 font-medium">Confidence: {diagnosis.confidence}</p>
+                    </div>
+                </div>
+                <div className="card p-4">
+                    <p className="section-title">What supports this</p>
+                    <ul className="space-y-2">
+                        {diagnosis.evidence.map((item, index) => (
+                            <li key={index} className="text-sm text-gray-700">
+                                <span className="font-semibold">{item.observation}</span>
+                                <span className="text-gray-500"> — {item.significance}</span>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+                <div className="card p-4 bg-lawn-green-50 border-lawn-green-100">
+                    <p className="section-title">Safest next step</p>
+                    <p className="text-sm text-gray-800">{diagnosis.safe_next_step}</p>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="space-y-4 animate-slide-up">
             {/* Header */}
@@ -158,13 +194,15 @@ function ScanHistoryItem({ scan, onDelete }: { scan: DisplayableLawnScan; onDele
                     )}
                 </div>
                 <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-sm text-gray-900">{diagnosis.condition_label}</p>
+                    <p className="font-semibold text-sm text-gray-900">
+                        {isDiagnosisV2(diagnosis) ? diagnosis.likely_cause : diagnosis.condition_label}
+                    </p>
                     <p className="text-xs text-gray-400 mt-0.5">
                         {format(new Date(scan.created_at), "MMM d, yyyy · h:mm a")}
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
-                    <ScoreRing score={diagnosis.condition_score} />
+                    {!isDiagnosisV2(diagnosis) && <ScoreRing score={diagnosis.condition_score} />}
                     {expanded ? (
                         <ChevronUp size={16} className="text-gray-400" />
                     ) : (
@@ -214,10 +252,11 @@ export function ScanPage() {
 
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-    const [currentDiagnosis, setCurrentDiagnosis] = useState<Diagnosis | null>(null);
+    const [currentDiagnosis, setCurrentDiagnosis] = useState<DisplayDiagnosis | null>(null);
     const [currentImageUrl, setCurrentImageUrl] = useState<string>("");
     const [error, setError] = useState<string | null>(null);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const requestIdRef = useRef<string | null>(null);
 
     const { data: scans = [], isLoading: scansLoading } = useQuery({
         queryKey: ["lawn-scans", user?.id],
@@ -270,6 +309,7 @@ export function ScanPage() {
         const file = e.target.files?.[0];
         if (!file) return;
         setSelectedFile(file);
+        requestIdRef.current = crypto.randomUUID();
         setPreviewUrl(URL.createObjectURL(file));
         setCurrentDiagnosis(null);
         setError(null);
@@ -290,7 +330,33 @@ export function ScanPage() {
             const mimeType = "image/jpeg"; // resizeImageForAI outputs JPEG
 
             // 2. Call Gemini Vision before uploading so failed analysis does not orphan storage files
-            const diagnosis = await diagnoseLawn(base64, mimeType, TODAY, grassType);
+            const requestId = requestIdRef.current ?? crypto.randomUUID();
+            requestIdRef.current = requestId;
+            const result = await diagnoseLawn({
+                mode: "personalized",
+                requestId,
+                imageBase64: base64,
+                mimeType,
+                context: {
+                    symptom: "not_sure",
+                    grass_type: grassType,
+                    date: format(TODAY, "yyyy-MM-dd"),
+                },
+            });
+            if (!isDiagnosisV2(result.diagnosis)) {
+                throw new Error("The lawn analysis returned an unexpected result.");
+            }
+            const diagnosis = result.diagnosis;
+            const retakeGuidance = getRetakeGuidance(diagnosis);
+            if (retakeGuidance) {
+                setError(retakeGuidance);
+                setSelectedFile(null);
+                if (previewUrl) URL.revokeObjectURL(previewUrl);
+                setPreviewUrl(null);
+                requestIdRef.current = null;
+                if (fileInputRef.current) fileInputRef.current.value = "";
+                return;
+            }
 
             // 3. Convert base64 to Blob for storage upload
             const blob = base64ToBlob(base64, mimeType);
@@ -334,6 +400,7 @@ export function ScanPage() {
             // Clear for next scan
             setSelectedFile(null);
             setPreviewUrl(null);
+            requestIdRef.current = null;
             if (fileInputRef.current) fileInputRef.current.value = "";
         } catch (err) {
             if (uploadedPath && !savedScan) {

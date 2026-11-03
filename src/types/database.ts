@@ -30,7 +30,8 @@ export interface LawnScan {
     user_id: string;
     image_url: string;
     storage_path: string | null;
-    diagnosis: import("@/lib/gemini").Diagnosis;
+    diagnosis: import("@/lib/gemini").Diagnosis
+        | import("@shared/diagnosis-contract").DiagnosisV2;
     created_at: string;
 }
 

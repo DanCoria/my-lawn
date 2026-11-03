@@ -1,16 +1,13 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useLawnProfile } from "@/contexts/LawnProfileContext";
 import { GRASS_TYPES, getGrassTypeInfo } from "@/lib/lawnLogic";
-import { diagnoseLawn, resizeImageForAI } from "@/lib/gemini";
 import type { GrassType, GrassTypeInfo } from "@/types/database";
 import type { GeocodingResult } from "@/types/geocoding";
 import {
     Loader2,
     ChevronRight,
     ChevronLeft,
-    Camera,
-    Sparkles,
     Check,
     Leaf,
     Sun,
@@ -88,9 +85,6 @@ export function OnboardingPage() {
     const [error, setError] = useState<string | null>(null);
 
     // Scan state
-    const [isScanning, setIsScanning] = useState(false);
-    const [scanResult, setScanResult] = useState<string | null>(null);
-    const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Location step state
     const [detectingLocation, setDetectingLocation] = useState(false);
@@ -130,50 +124,6 @@ export function OnboardingPage() {
         }, 400);
         return () => clearTimeout(timeoutId);
     }, [searchQuery, locationResolved]);
-
-    const handleScanPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-
-        setIsScanning(true);
-        setError(null);
-        setScanResult(null);
-
-        try {
-            const base64 = await resizeImageForAI(file);
-            const mimeType = "image/jpeg";
-            const diagnosis = await diagnoseLawn(base64, mimeType, new Date());
-
-            // Extract grass type from diagnosis observations/summary
-            const fullText = [
-                diagnosis.summary,
-                ...(diagnosis.observations ?? []),
-            ].join(" ").toLowerCase();
-
-            // Try to match a grass type from the diagnosis text
-            let detectedGrass: GrassType | null = null;
-            for (const grass of GRASS_TYPES) {
-                const searchTerms = [grass.name.toLowerCase(), grass.id.replace("-", " ")];
-                if (searchTerms.some((term) => fullText.includes(term))) {
-                    detectedGrass = grass.id;
-                    break;
-                }
-            }
-
-            if (detectedGrass) {
-                setSelectedGrass(detectedGrass);
-                const info = getGrassTypeInfo(detectedGrass);
-                setScanResult(`AI detected: ${info.name}! ${info.emoji}`);
-            } else {
-                setScanResult("Couldn't identify grass type from the scan. Please select manually below.");
-            }
-        } catch (err) {
-            setError(err instanceof Error ? err.message : "Scan failed — please try again or pick manually.");
-        } finally {
-            setIsScanning(false);
-            if (fileInputRef.current) fileInputRef.current.value = "";
-        }
-    };
 
     const handleGPSDetect = () => {
         setDetectingLocation(true);
@@ -321,43 +271,11 @@ export function OnboardingPage() {
                             </p>
                         </div>
 
-                        {/* Scan button */}
-                        <button
-                            id="onboarding-scan-btn"
-                            type="button"
-                            onClick={() => !isScanning && fileInputRef.current?.click()}
-                            disabled={isScanning}
-                            className="w-full mb-4 flex items-center justify-center gap-2.5 py-3.5 rounded-2xl border-2 border-dashed border-lawn-green-500/40 bg-lawn-green-800/30 backdrop-blur-sm text-lawn-green-200 text-sm font-semibold hover:bg-lawn-green-800/50 transition-all disabled:opacity-50"
-                        >
-                            {isScanning ? (
-                                <>
-                                    <Loader2 size={16} className="animate-spin" />
-                                    Scanning your lawn...
-                                </>
-                            ) : (
-                                <>
-                                    <Camera size={16} />
-                                    Not sure? Scan your lawn
-                                    <Sparkles size={14} className="text-lawn-green-400" />
-                                </>
-                            )}
-                        </button>
-                        <input
-                            ref={fileInputRef}
-                            type="file"
-                            accept="image/*"
-                            capture="environment"
-                            onChange={handleScanPhoto}
-                            className="hidden"
-                            id="onboarding-scan-input"
-                        />
-
-                        {/* Scan result */}
-                        {scanResult && (
-                            <div className="mb-4 py-3 px-4 rounded-xl bg-lawn-green-600/20 border border-lawn-green-500/30 backdrop-blur-sm">
-                                <p className="text-lawn-green-200 text-sm text-center">{scanResult}</p>
-                            </div>
-                        )}
+                        <div className="mb-4 py-3 px-4 rounded-xl bg-lawn-green-800/30 border border-lawn-green-500/30 backdrop-blur-sm">
+                            <p className="text-lawn-green-200 text-sm text-center">
+                                Not sure? Pick the closest match for now. A lawn diagnosis will focus on the problem you want help solving and will not spend a scan just to guess the grass type.
+                            </p>
+                        </div>
 
                         {/* Grass type list */}
                         <div className="flex-1 overflow-y-auto pb-28 space-y-2.5 -mx-1 px-1">
