@@ -1,18 +1,22 @@
+import { createContext, useContext } from "react";
 import { NavLink } from "react-router-dom";
-import { LayoutDashboard, ClipboardList, CalendarDays, Sparkles, User } from "lucide-react";
+import { House, ListChecks, ScanLine, TrendingUp } from "lucide-react";
 
 const navItems = [
-    { to: "/", icon: LayoutDashboard, label: "Dashboard", id: "nav-dashboard" },
-    { to: "/log", icon: ClipboardList, label: "Log", id: "nav-log" },
-    { to: "/scan", icon: Sparkles, label: "Scan", id: "nav-scan" },
-    { to: "/schedule", icon: CalendarDays, label: "Schedule", id: "nav-schedule" },
-    { to: "/profile", icon: User, label: "Profile", id: "nav-profile" },
+    { to: "/", icon: House, label: "Today", id: "nav-today" },
+    { to: "/plan", icon: ListChecks, label: "Plan", id: "nav-plan" },
+    { to: "/scan", icon: ScanLine, label: "Scan", id: "nav-scan" },
+    { to: "/progress", icon: TrendingUp, label: "Progress", id: "nav-progress" },
 ];
 
+export const SuppressBottomNavContext = createContext(false);
+
 export function BottomNav() {
+    const suppressed = useContext(SuppressBottomNavContext);
+    if (suppressed) return null;
+
     return (
-        <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 shadow-lg z-50"
-            style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
+        <nav aria-label="Primary" className="fixed bottom-0 left-0 right-0 z-50 border-t border-gray-100 bg-white pb-[env(safe-area-inset-bottom)] shadow-lg">
             <div className="flex items-stretch">
                 {navItems.map(({ to, icon: Icon, label, id }) => (
                     <NavLink

@@ -3,9 +3,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { LawnProfileProvider } from "@/contexts/LawnProfileContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { AppShell } from "@/components/AppShell";
 import { LoginPage } from "@/pages/LoginPage";
 import { OnboardingPage } from "@/pages/OnboardingPage";
-import { DashboardPage } from "@/pages/DashboardPage";
+import { TodayPage } from "@/pages/TodayPage";
 import { ActivityLogPage } from "@/pages/ActivityLogPage";
 import { SchedulePage } from "@/pages/SchedulePage";
 import { ScanPage } from "@/pages/ScanPage";
@@ -45,45 +46,20 @@ export default function App() {
                                 }
                             />
                             <Route
-                                path="/"
                                 element={
                                     <ProtectedRoute>
-                                        <DashboardPage />
+                                        <AppShell />
                                     </ProtectedRoute>
                                 }
-                            />
-                            <Route
-                                path="/log"
-                                element={
-                                    <ProtectedRoute>
-                                        <ActivityLogPage />
-                                    </ProtectedRoute>
-                                }
-                            />
-                            <Route
-                                path="/scan"
-                                element={
-                                    <ProtectedRoute>
-                                        <ScanPage />
-                                    </ProtectedRoute>
-                                }
-                            />
-                            <Route
-                                path="/schedule"
-                                element={
-                                    <ProtectedRoute>
-                                        <SchedulePage />
-                                    </ProtectedRoute>
-                                }
-                            />
-                            <Route
-                                path="/profile"
-                                element={
-                                    <ProtectedRoute>
-                                        <ProfilePage />
-                                    </ProtectedRoute>
-                                }
-                            />
+                            >
+                                <Route index element={<TodayPage />} />
+                                <Route path="plan" element={<SchedulePage />} />
+                                <Route path="scan" element={<ScanPage />} />
+                                <Route path="progress" element={<ActivityLogPage />} />
+                                <Route path="profile" element={<ProfilePage />} />
+                            </Route>
+                            <Route path="/log" element={<Navigate to="/progress" replace />} />
+                            <Route path="/schedule" element={<Navigate to="/plan" replace />} />
                             <Route path="*" element={<Navigate to="/" replace />} />
                         </Routes>
                     </BrowserRouter>
