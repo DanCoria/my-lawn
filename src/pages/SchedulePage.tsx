@@ -25,7 +25,7 @@ function formatCompletionDate(date: string): string {
 
 const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-export function SchedulePage() {
+export function SchedulePage({ embedded = false }: { embedded?: boolean }) {
     const { user } = useAuth();
     const grassType = useGrassType();
     const grassInfo = getGrassTypeInfo(grassType);
@@ -62,16 +62,16 @@ export function SchedulePage() {
     const completionInfo = getScheduleTaskCompletionInfo(scheduleTasks, explicitCompletions, activities);
 
     return (
-        <div className="min-h-screen bg-gray-50">
+        <div className={embedded ? "" : "min-h-screen bg-gray-50"}>
             {/* Header */}
-            <div className="bg-lawn-green-700 px-5 pt-12 pb-5">
+            {!embedded && <div className="bg-lawn-green-700 px-5 pt-12 pb-5">
                 <h1 className="text-white text-2xl font-bold">{YEAR} Season Schedule</h1>
                 <p className="text-lawn-green-200 text-sm mt-0.5">
                     {grassInfo.emoji} {grassInfo.name} — {grassInfo.season === "warm" ? "warm" : "cool"}-season calendar
                 </p>
-            </div>
+            </div>}
 
-            <div className="px-4 py-5 space-y-6 page-content">
+            <div className={embedded ? "space-y-6" : "px-4 py-5 space-y-6 page-content"}>
 
                 {/* Visual Timeline */}
                 <div>
@@ -209,7 +209,7 @@ export function SchedulePage() {
                 </div>
             </div>
 
-            <BottomNav />
+            {!embedded && <BottomNav />}
         </div>
     );
 }

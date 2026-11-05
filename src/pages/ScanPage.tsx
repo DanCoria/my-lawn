@@ -1,13 +1,16 @@
-import { useState, useRef } from "react";
+import { useState, useRef, type ReactNode } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import { useGrassType } from "@/contexts/LawnProfileContext";
 import { BottomNav } from "@/components/BottomNav";
 import { diagnoseLawn, getRetakeGuidance, resizeImageForAI, Diagnosis } from "@/lib/gemini";
+import type { DiagnosisMode } from "@/lib/gemini";
 import { isDiagnosisV2, type DiagnosisV2 } from "@shared/diagnosis-contract";
 import { getGrassTypeInfo } from "@/lib/lawnLogic";
-import { LawnScan } from "@/types/database";
+import { createObservationFromDiagnosis } from "@/features/plans/createPlan";
+import { usePrimaryCase } from "@/features/plans/api";
+import type { AiUsageEvent, AllowanceSummary, LawnCase, LawnScan, ScanEntitlement, ScanPurpose } from "@/types/database";
 import {
     Camera,
     Upload,
@@ -24,6 +27,140 @@ import { format } from "date-fns";
 
 const TODAY = new Date();
 const SIGNED_SCAN_URL_EXPIRES_IN_SECONDS = 60 * 60;
+
+const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+
+export interface ScanIntent {
+    mode: Extract<DiagnosisMode, "personalized" | "follow_up">;
+    purpose: Extract<ScanPurpose, "initial" | "follow_up">;
+    caseId: string | null;
+    caseTitle?: string;
+}
+
+export function getScanIntent(primaryCase: LawnCase | null): ScanIntent {
+    if (!primaryCase) return { mode: "personalized", purpose: "initial", caseId: null };
+    return {
+        mode: "follow_up",
+        purpose: "follow_up",
+        caseId: primaryCase.id,
+        caseTitle: primaryCase.title,
+    };
+}
+
+export function deriveAllowanceSummary(
+    entitlement: ScanEntitlement | null,
+    events: readonly AiUsageEvent[],
+    now = new Date(),
+): AllowanceSummary {
+    const inFlight = events.some((event) => event.status === "reserved" || event.status === "started");
+    if (!entitlement) {
+        return { source: "welcome", remaining: 3, reset_at: null, in_flight: inFlight };
+    }
+    const start = new Date(entitlement.welcome_started_at).getTime();
+    const elapsed = Math.max(0, now.getTime() - start);
+    if (elapsed < THIRTY_DAYS_MS) {
+        const used = events.filter((event) => event.allowance_source === "welcome" && event.status === "completed").length;
+        return {
+            source: "welcome",
+            remaining: Math.max(0, entitlement.welcome_limit - used),
+            reset_at: new Date(start + THIRTY_DAYS_MS).toISOString(),
+            in_flight: inFlight,
+        };
+    }
+    const periodIndex = Math.floor(elapsed / THIRTY_DAYS_MS);
+    const periodStart = start + periodIndex * THIRTY_DAYS_MS;
+    const used = events.filter((event) =>
+        event.allowance_source === "monthly"
+        && event.status === "completed"
+        && new Date(event.created_at).getTime() >= periodStart,
+    ).length;
+    return {
+        source: "monthly",
+        remaining: Math.max(0, 1 - used),
+        reset_at: new Date(periodStart + THIRTY_DAYS_MS).toISOString(),
+        in_flight: inFlight,
+    };
+}
+
+export function stableScanRequestId(
+    current: string | null,
+    create: () => string = () => crypto.randomUUID(),
+): string {
+    return current ?? create();
+}
+
+export function scanImageSource(scan: DisplayableLawnScan): string | null {
+    return scan.signed_image_url || scan.image_url || null;
+}
+
+export function scanDiagnosisLabel(scan: LawnScan): string {
+    return isDiagnosisV2(scan.diagnosis)
+        ? scan.diagnosis.likely_cause
+        : scan.diagnosis.condition_label || "Previous lawn scan";
+}
+
+function resetLabel(value: string | null): string | null {
+    if (!value || !Number.isFinite(Date.parse(value))) return null;
+    return new Date(value).toLocaleDateString(undefined, { month: "long", day: "numeric" });
+}
+
+export function ScanExperience({
+    allowance,
+    intent,
+    recentScans,
+    onChoosePhoto,
+}: {
+    allowance: AllowanceSummary | null;
+    intent: ScanIntent;
+    recentScans: ReactNode;
+    onChoosePhoto: () => void;
+}) {
+    const exhausted = allowance?.remaining === 0;
+    const disabled = exhausted || allowance?.in_flight === true;
+    const reset = resetLabel(allowance?.reset_at ?? null);
+    return (
+        <>
+            <section className="card p-5" aria-labelledby="scan-allowance-title">
+                <div className="flex items-start justify-between gap-4">
+                    <div>
+                        <p id="scan-allowance-title" className="text-xs font-bold uppercase tracking-wide text-gray-500">Scan allowance</p>
+                        <p className="mt-1 text-xl font-bold text-gray-950">
+                            {allowance ? `${allowance.remaining} ${allowance.remaining === 1 ? "scan" : "scans"} available` : "Checking availability…"}
+                        </p>
+                    </div>
+                    {allowance && <span className="rounded-full bg-lawn-green-50 px-3 py-1 text-xs font-semibold text-lawn-green-700">{allowance.source === "welcome" ? "Welcome scans" : "Monthly scan"}</span>}
+                </div>
+                {exhausted && reset && <p className="mt-3 text-sm text-gray-700">Your next scan is available {reset}. Your results and plan stay available below.</p>}
+                {allowance?.in_flight && <p className="mt-3 text-sm font-medium text-amber-700">A scan is already being analyzed. It is safe to leave this page and return shortly.</p>}
+                <p className="mt-3 text-xs text-gray-500">Failed or unusable analyses do not use your personal scan allowance.</p>
+            </section>
+
+            <section className="card p-5">
+                <p className="text-xs font-bold uppercase tracking-wide text-lawn-green-700">
+                    {intent.purpose === "follow_up" ? "Progress scan" : "Problem scan"}
+                </p>
+                <h2 className="mt-1 text-lg font-bold text-gray-950">
+                    {intent.purpose === "follow_up" && intent.caseTitle
+                        ? `Compare progress on ${intent.caseTitle}`
+                        : "Diagnose a lawn problem"}
+                </h2>
+                <p className="mt-2 text-sm text-gray-600">
+                    {intent.purpose === "follow_up"
+                        ? "This photo will be linked to your current case so the coach can compare what changed."
+                        : "Your result will be saved as an observation. You decide whether to make it your active plan."}
+                </p>
+                <button type="button" className="btn-primary mt-4 flex min-h-12 w-full items-center justify-center" disabled={disabled || allowance === null} onClick={onChoosePhoto}>
+                    <Camera size={18} aria-hidden="true" /> Choose a photo
+                </button>
+            </section>
+
+            <section aria-labelledby="recent-scans-title">
+                <h2 id="recent-scans-title" className="section-title px-1">Recent scans</h2>
+                {recentScans}
+            </section>
+        </>
+    );
+}
 
 type DisplayableLawnScan = LawnScan & {
     signed_image_url?: string | null;
@@ -172,11 +309,11 @@ function DiagnosisResult({ diagnosis, imageUrl }: { diagnosis: DisplayDiagnosis;
     );
 }
 
-function ScanHistoryItem({ scan, onDelete }: { scan: DisplayableLawnScan; onDelete: (scan: DisplayableLawnScan) => void }) {
+export function ScanHistoryItem({ scan, onDelete }: { scan: DisplayableLawnScan; onDelete: (scan: DisplayableLawnScan) => void }) {
     const [expanded, setExpanded] = useState(false);
     const diagnosis = scan.diagnosis;
     // signed_image_url is used for private storage objects; image_url supports legacy public/base64 scans.
-    const imgSrc = scan.signed_image_url || scan.image_url || null;
+    const imgSrc = scanImageSource(scan);
 
     return (
         <div className="card overflow-hidden">
@@ -195,7 +332,7 @@ function ScanHistoryItem({ scan, onDelete }: { scan: DisplayableLawnScan; onDele
                 </div>
                 <div className="flex-1 min-w-0">
                     <p className="font-semibold text-sm text-gray-900">
-                        {isDiagnosisV2(diagnosis) ? diagnosis.likely_cause : diagnosis.condition_label}
+                        {scanDiagnosisLabel(scan)}
                     </p>
                     <p className="text-xs text-gray-400 mt-0.5">
                         {format(new Date(scan.created_at), "MMM d, yyyy · h:mm a")}
@@ -257,6 +394,26 @@ export function ScanPage() {
     const [error, setError] = useState<string | null>(null);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const requestIdRef = useRef<string | null>(null);
+    const primaryCaseQuery = usePrimaryCase(user?.id ?? "");
+    const intent = getScanIntent(primaryCaseQuery.data ?? null);
+
+    const { data: allowance = null } = useQuery({
+        queryKey: ["scan-allowance", user?.id],
+        queryFn: async () => {
+            const [entitlementResult, usageResult] = await Promise.all([
+                supabase.from("scan_entitlements").select("*").eq("user_id", user!.id).maybeSingle(),
+                supabase.from("ai_usage_events").select("*").eq("user_id", user!.id).order("created_at", { ascending: false }),
+            ]);
+            if (entitlementResult.error) throw entitlementResult.error;
+            if (usageResult.error) throw usageResult.error;
+            return deriveAllowanceSummary(
+                entitlementResult.data as ScanEntitlement | null,
+                (usageResult.data ?? []) as AiUsageEvent[],
+            );
+        },
+        enabled: !!user,
+        refetchInterval: (query) => query.state.data?.in_flight ? 5000 : false,
+    });
 
     const { data: scans = [], isLoading: scansLoading } = useQuery({
         queryKey: ["lawn-scans", user?.id],
@@ -330,10 +487,10 @@ export function ScanPage() {
             const mimeType = "image/jpeg"; // resizeImageForAI outputs JPEG
 
             // 2. Call Gemini Vision before uploading so failed analysis does not orphan storage files
-            const requestId = requestIdRef.current ?? crypto.randomUUID();
+            const requestId = stableScanRequestId(requestIdRef.current);
             requestIdRef.current = requestId;
             const result = await diagnoseLawn({
-                mode: "personalized",
+                mode: intent.mode,
                 requestId,
                 imageBase64: base64,
                 mimeType,
@@ -341,6 +498,7 @@ export function ScanPage() {
                     symptom: "not_sure",
                     grass_type: grassType,
                     date: format(TODAY, "yyyy-MM-dd"),
+                    original_diagnosis_summary: primaryCaseQuery.data?.diagnosis.summary,
                 },
             });
             if (!isDiagnosisV2(result.diagnosis)) {
@@ -358,8 +516,23 @@ export function ScanPage() {
                 return;
             }
 
-            // 3. Convert base64 to Blob for storage upload
+            // 3. Convert base64 to Blob for private storage persistence
             const blob = base64ToBlob(base64, mimeType);
+
+            if (intent.purpose === "initial") {
+                await createObservationFromDiagnosis(user.id, diagnosis, blob, { grassType });
+                savedScan = true;
+                setCurrentDiagnosis(diagnosis);
+                setCurrentImageUrl(previewUrl ?? "");
+                queryClient.invalidateQueries({ queryKey: ["lawn-scans"] });
+                queryClient.invalidateQueries({ queryKey: ["lawn-cases"] });
+                queryClient.invalidateQueries({ queryKey: ["scan-allowance"] });
+                setSelectedFile(null);
+                setPreviewUrl(null);
+                requestIdRef.current = null;
+                if (fileInputRef.current) fileInputRef.current.value = "";
+                return;
+            }
 
             // 4. Upload to private Supabase Storage
             const uuid = typeof crypto.randomUUID === "function"
@@ -388,6 +561,9 @@ export function ScanPage() {
                 image_url: filePath,
                 storage_path: filePath,
                 diagnosis,
+                case_id: intent.caseId,
+                purpose: intent.purpose,
+                diagnosis_schema_version: 2,
             });
             if (insertError) throw new Error(`Save failed: ${insertError.message}`);
             savedScan = true;
@@ -396,6 +572,7 @@ export function ScanPage() {
             setCurrentDiagnosis(diagnosis);
             setCurrentImageUrl(signedUrlData.signedUrl);
             queryClient.invalidateQueries({ queryKey: ["lawn-scans"] });
+            queryClient.invalidateQueries({ queryKey: ["scan-allowance"] });
 
             // Clear for next scan
             setSelectedFile(null);
@@ -430,9 +607,36 @@ export function ScanPage() {
 
             <div className="px-4 py-5 space-y-5 page-content">
 
+                <ScanExperience
+                    allowance={primaryCaseQuery.isLoading || !allowance
+                        ? null
+                        : isAnalyzing
+                          ? { ...allowance, in_flight: true }
+                          : allowance}
+                    intent={intent}
+                    onChoosePhoto={() => fileInputRef.current?.click()}
+                    recentScans={scansLoading ? (
+                        <div className="flex justify-center py-6">
+                            <Loader2 className="animate-spin text-lawn-green-600" size={24} />
+                        </div>
+                    ) : scans.length === 0 ? (
+                        <div className="card p-8 text-center">
+                            <p className="text-3xl mb-2">📷</p>
+                            <p className="text-gray-500 text-sm font-medium">No scans yet</p>
+                            <p className="text-gray-400 text-xs mt-1">Your first diagnosis will appear here.</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-3">
+                            {scans.map((scan) => (
+                                <ScanHistoryItem key={scan.id} scan={scan} onDelete={(item) => deleteScan.mutate(item)} />
+                            ))}
+                        </div>
+                    )}
+                />
+
                 {/* Upload / Camera Zone */}
-                <div>
-                    <p className="section-title px-1">Take or Upload a Photo</p>
+                <div className={selectedFile ? "" : "sr-only"}>
+                    <p className="section-title px-1">Selected photo</p>
                     <div
                         className="card overflow-hidden cursor-pointer"
                         onClick={() => !isAnalyzing && fileInputRef.current?.click()}
@@ -533,33 +737,6 @@ export function ScanPage() {
                     </div>
                 )}
 
-                {/* Scan History */}
-                <div>
-                    <p className="section-title px-1">Scan History</p>
-                    {scansLoading ? (
-                        <div className="flex justify-center py-6">
-                            <Loader2 className="animate-spin text-lawn-green-600" size={24} />
-                        </div>
-                    ) : scans.length === 0 ? (
-                        <div className="card p-8 text-center">
-                            <p className="text-3xl mb-2">📷</p>
-                            <p className="text-gray-500 text-sm font-medium">No scans yet</p>
-                            <p className="text-gray-400 text-xs mt-1">
-                                Take a photo above to get your first AI diagnosis.
-                            </p>
-                        </div>
-                    ) : (
-                        <div className="space-y-3">
-                            {scans.map((scan) => (
-                                <ScanHistoryItem
-                                    key={scan.id}
-                                    scan={scan}
-                                    onDelete={(scan) => deleteScan.mutate(scan)}
-                                />
-                            ))}
-                        </div>
-                    )}
-                </div>
             </div>
 
             <BottomNav />
