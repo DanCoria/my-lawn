@@ -1,8 +1,10 @@
 
 import {
     isDiagnosisV2,
+    isFollowUpComparison,
     isGuestDiagnosisPreview,
     type DiagnosisV2,
+    type FollowUpComparison,
     type GuestDiagnosisPreview,
 } from "@shared/diagnosis-contract";
 import { supabase } from "@/lib/supabase";
@@ -50,17 +52,19 @@ export interface BrowserDiagnosisRequest {
     requestId: string;
     imageBase64: string;
     mimeType: "image/jpeg" | "image/png";
+    referenceImageBase64?: string;
+    referenceMimeType?: "image/jpeg" | "image/png";
     context: BrowserDiagnosisContext;
 }
 
 export interface DiagnoseResponse {
-    diagnosis: GuestDiagnosisPreview | DiagnosisV2;
+    diagnosis: GuestDiagnosisPreview | DiagnosisV2 | FollowUpComparison;
     allowance: { source: "guest" | "welcome" | "monthly" };
     usage_event_id: string;
 }
 
 export function getRetakeGuidance(
-    diagnosis: GuestDiagnosisPreview | DiagnosisV2,
+    diagnosis: GuestDiagnosisPreview | DiagnosisV2 | FollowUpComparison,
 ): string | null {
     if (diagnosis.image_quality.usable) return null;
     return diagnosis.image_quality.retake_guidance
@@ -147,7 +151,9 @@ function parseResponse(value: unknown, mode: DiagnosisMode): DiagnoseResponse | 
     if (typeof value.usage_event_id !== "string") return null;
     const validDiagnosis = mode === "guest_preview"
         ? isGuestDiagnosisPreview(value.diagnosis)
-        : isDiagnosisV2(value.diagnosis);
+        : mode === "follow_up"
+          ? isFollowUpComparison(value.diagnosis)
+          : isDiagnosisV2(value.diagnosis);
     if (!validDiagnosis) return null;
     return value as unknown as DiagnoseResponse;
 }
@@ -182,6 +188,10 @@ export async function diagnoseLawn(
                 request_id: request.requestId,
                 image: request.imageBase64,
                 mime_type: request.mimeType,
+                ...(request.referenceImageBase64 && request.referenceMimeType ? {
+                    reference_image: request.referenceImageBase64,
+                    reference_mime_type: request.referenceMimeType,
+                } : {}),
                 context: request.context,
             }),
         });

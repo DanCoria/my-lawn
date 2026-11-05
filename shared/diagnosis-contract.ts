@@ -61,6 +61,21 @@ export interface DiagnosisV2 {
     plan_seed: PlanSeed;
 }
 
+export type FollowUpStatus =
+    | "improving"
+    | "unchanged"
+    | "worsening"
+    | "resolved"
+    | "unable_to_determine";
+
+export interface FollowUpComparison {
+    schema_version: "follow-up-1";
+    image_quality: ImageQuality;
+    status: FollowUpStatus;
+    summary: string;
+    evidence: string[];
+}
+
 export interface AiUsageSummary {
     model: string;
     input_tokens: number;
@@ -76,6 +91,9 @@ const CONFIDENCE_VALUES = new Set<DiagnosisConfidence>([
     "low",
     "medium",
     "high",
+]);
+const FOLLOW_UP_STATUS_VALUES = new Set<FollowUpStatus>([
+    "improving", "unchanged", "worsening", "resolved", "unable_to_determine",
 ]);
 
 function isRecord(value: unknown): value is UnknownRecord {
@@ -274,10 +292,23 @@ export function isDiagnosisV2(value: unknown): value is DiagnosisV2 {
     );
 }
 
+export function isFollowUpComparison(value: unknown): value is FollowUpComparison {
+    return (
+        isRecord(value)
+        && hasExactKeys(value, ["schema_version", "image_quality", "status", "summary", "evidence"])
+        && value.schema_version === "follow-up-1"
+        && isImageQuality(value.image_quality)
+        && typeof value.status === "string"
+        && FOLLOW_UP_STATUS_VALUES.has(value.status as FollowUpStatus)
+        && isNonEmptyString(value.summary)
+        && isStringArray(value.evidence)
+    );
+}
+
 export function isUsableDiagnosis(
     value: unknown,
-): value is GuestDiagnosisPreview | DiagnosisV2 {
-    if (isGuestDiagnosisPreview(value) || isDiagnosisV2(value)) {
+): value is GuestDiagnosisPreview | DiagnosisV2 | FollowUpComparison {
+    if (isGuestDiagnosisPreview(value) || isDiagnosisV2(value) || isFollowUpComparison(value)) {
         return value.image_quality.usable;
     }
 

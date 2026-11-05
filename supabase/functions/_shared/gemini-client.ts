@@ -1,10 +1,12 @@
 import type {
     AiUsageSummary,
     DiagnosisV2,
+    FollowUpComparison,
     GuestDiagnosisPreview,
 } from "./ai-types.ts";
 import {
     isDiagnosisV2,
+    isFollowUpComparison,
     isGuestDiagnosisPreview,
 } from "./ai-types.ts";
 
@@ -14,6 +16,8 @@ export interface GeminiDiagnosisRequest {
     route: GeminiRoute;
     imageBase64: string;
     mimeType: string;
+    referenceImageBase64?: string;
+    referenceMimeType?: string;
     context: Record<string, unknown>;
 }
 
@@ -43,6 +47,8 @@ export interface GeminiTransportRequest {
     prompt: string;
     imageBase64: string;
     mimeType: string;
+    referenceImageBase64?: string;
+    referenceMimeType?: string;
     generationConfig: GeminiGenerationConfig;
 }
 
@@ -62,8 +68,13 @@ export type GeminiDiagnosisResult =
           usage: AiUsageSummary;
       }
     | {
-          route: "personalized" | "follow_up";
+          route: "personalized";
           diagnosis: DiagnosisV2;
+          usage: AiUsageSummary;
+      }
+    | {
+          route: "follow_up";
+          diagnosis: FollowUpComparison;
           usage: AiUsageSummary;
       };
 
@@ -225,6 +236,22 @@ const diagnosisResponseSchema: Record<string, unknown> = {
     },
 };
 
+const followUpResponseSchema: Record<string, unknown> = {
+    type: "object",
+    additionalProperties: false,
+    required: ["schema_version", "image_quality", "status", "summary", "evidence"],
+    properties: {
+        schema_version: { type: "string", enum: ["follow-up-1"] },
+        image_quality: imageQualitySchema,
+        status: {
+            type: "string",
+            enum: ["improving", "unchanged", "worsening", "resolved", "unable_to_determine"],
+        },
+        summary: { type: "string" },
+        evidence: { type: "array", items: { type: "string" } },
+    },
+};
+
 function buildPrompt(
     route: GeminiRoute,
     context: Record<string, unknown>,
@@ -243,6 +270,16 @@ ${JSON.stringify(context)}
 You are creating a useful but deliberately limited Guest Preview.
 Return only: image quality, one likely cause, confidence, a short explanation, and one safe next step.
 Do not generate alternatives, treatment fields, a rescue plan, or any other hidden personalized data.
+
+${sharedRules}
+`.trim();
+    }
+
+    if (route === "follow_up") {
+        return `
+Compare the first image (the original) with the second image (the follow-up).
+Propose only an observable comparison status, a short change summary, visible evidence, and image quality.
+Do not diagnose a new problem, create a plan, or decide that a case should be closed.
 
 ${sharedRules}
 `.trim();
@@ -326,12 +363,16 @@ export function createGeminiDiagnosisClient(
                     prompt: buildPrompt(request.route, request.context),
                     imageBase64: request.imageBase64,
                     mimeType: request.mimeType,
+                    referenceImageBase64: request.referenceImageBase64,
+                    referenceMimeType: request.referenceMimeType,
                     generationConfig: {
                         maxOutputTokens: isGuest ? 700 : 1500,
                         responseMimeType: "application/json",
                         responseSchema: isGuest
                             ? guestResponseSchema
-                            : diagnosisResponseSchema,
+                            : request.route === "follow_up"
+                              ? followUpResponseSchema
+                              : diagnosisResponseSchema,
                         thinkingConfig: { thinkingBudget: 0 },
                     },
                 });
@@ -384,6 +425,18 @@ export function createGeminiDiagnosisClient(
                 return { route: "guest_preview", diagnosis, usage };
             }
 
+            if (request.route === "follow_up") {
+                if (!request.referenceImageBase64 || !request.referenceMimeType || !isFollowUpComparison(diagnosis)) {
+                    throw new GeminiProviderError(
+                        "invalid_contract",
+                        "Gemini returned an invalid follow-up comparison contract",
+                        undefined,
+                        usage,
+                    );
+                }
+                return { route: "follow_up", diagnosis, usage };
+            }
+
             if (!isDiagnosisV2(diagnosis)) {
                 throw new GeminiProviderError(
                     "invalid_contract",
@@ -393,14 +446,7 @@ export function createGeminiDiagnosisClient(
                 );
             }
 
-            return {
-                route:
-                    request.route === "follow_up"
-                        ? "follow_up"
-                        : "personalized",
-                diagnosis,
-                usage,
-            };
+            return { route: "personalized", diagnosis, usage };
         },
     };
 }

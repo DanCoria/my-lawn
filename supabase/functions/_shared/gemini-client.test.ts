@@ -57,6 +57,14 @@ const personalizedDiagnosis = {
     },
 } as const;
 
+const followUpComparison = {
+    schema_version: "follow-up-1",
+    image_quality: { usable: true },
+    status: "improving",
+    summary: "The affected area has denser green coverage.",
+    evidence: ["More green blades", "Less exposed soil"],
+} as const;
+
 function createFakeTransport(responses: GeminiTransportResponse[]): {
     transport: GeminiTransport;
     calls: GeminiTransportRequest[];
@@ -146,7 +154,7 @@ describe("Gemini diagnosis client", () => {
     test("thinking_is_zero", async () => {
         const fake = createFakeTransport([
             successResponse(guestDiagnosis),
-            successResponse(personalizedDiagnosis),
+            successResponse(followUpComparison),
         ]);
         const client = createClient(fake.transport);
 
@@ -160,11 +168,28 @@ describe("Gemini diagnosis client", () => {
             route: "follow_up",
             imageBase64: "follow-up-image",
             mimeType: "image/jpeg",
+            referenceImageBase64: "original-image",
+            referenceMimeType: "image/jpeg",
             context: {},
         });
 
         expect(fake.calls.map((call) => call.generationConfig.thinkingConfig))
             .toEqual([{ thinkingBudget: 0 }, { thinkingBudget: 0 }]);
+        expect(fake.calls[1]).toMatchObject({ referenceImageBase64: "original-image" });
+    });
+
+    test("follow_up_returns_only_a_comparison_proposal", async () => {
+        const fake = createFakeTransport([successResponse(followUpComparison)]);
+        const result = await createClient(fake.transport).analyze({
+            route: "follow_up",
+            imageBase64: "after",
+            mimeType: "image/jpeg",
+            referenceImageBase64: "before",
+            referenceMimeType: "image/jpeg",
+            context: {},
+        });
+        expect(result).toMatchObject({ route: "follow_up", diagnosis: followUpComparison });
+        expect(result.diagnosis).not.toHaveProperty("plan_seed");
     });
 
     test("invalid_json_is_provider_failure", async () => {

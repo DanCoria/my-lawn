@@ -3,6 +3,7 @@ import { describe, expect, test } from "vitest";
 import {
     isAiUsageSummary,
     isDiagnosisV2,
+    isFollowUpComparison,
     isGuestDiagnosisPreview,
     isUsableDiagnosis,
 } from "./diagnosis-contract";
@@ -58,6 +59,18 @@ const validDiagnosisV2 = {
 } as const;
 
 describe("diagnosis contract", () => {
+    test("accepts a bounded follow-up comparison and rejects unsupported status", () => {
+        const comparison = {
+            schema_version: "follow-up-1",
+            image_quality: { usable: true },
+            status: "improving",
+            summary: "Coverage is denser in the affected area.",
+            evidence: ["More green blades", "Less exposed soil"],
+        };
+        expect(isFollowUpComparison(comparison)).toBe(true);
+        expect(isFollowUpComparison({ ...comparison, status: "perfect" })).toBe(false);
+    });
+
     test("accepts_guest_preview_contract", () => {
         expect(isGuestDiagnosisPreview(validGuestPreview)).toBe(true);
         expect(isUsableDiagnosis(validGuestPreview)).toBe(true);

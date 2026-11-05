@@ -89,7 +89,7 @@ export type ScanComparisonStatus =
     | "unchanged"
     | "worsening"
     | "resolved"
-    | "unable";
+    | "unable_to_determine";
 
 export interface LawnScan {
     id: string;
@@ -97,12 +97,17 @@ export interface LawnScan {
     image_url: string;
     storage_path: string | null;
     diagnosis: import("@/lib/gemini").Diagnosis
-        | import("@shared/diagnosis-contract").DiagnosisV2;
+        | import("@shared/diagnosis-contract").DiagnosisV2
+        | import("@shared/diagnosis-contract").FollowUpComparison;
     case_id: string | null;
     purpose: ScanPurpose | null;
     diagnosis_schema_version: number | null;
     comparison_status: ScanComparisonStatus | null;
     comparison_summary: string | null;
+    comparison_proposal_status: ScanComparisonStatus | null;
+    comparison_proposal_summary: string | null;
+    comparison_evidence: string[] | null;
+    comparison_confirmed_at: string | null;
     created_at: string;
 }
 

@@ -6,10 +6,12 @@ import { useGrassType } from "@/contexts/LawnProfileContext";
 import { BottomNav } from "@/components/BottomNav";
 import { diagnoseLawn, getRetakeGuidance, resizeImageForAI, Diagnosis } from "@/lib/gemini";
 import type { DiagnosisMode } from "@/lib/gemini";
-import { isDiagnosisV2, type DiagnosisV2 } from "@shared/diagnosis-contract";
+import { isDiagnosisV2, isFollowUpComparison, type DiagnosisV2, type FollowUpComparison } from "@shared/diagnosis-contract";
 import { getGrassTypeInfo } from "@/lib/lawnLogic";
 import { createObservationFromDiagnosis } from "@/features/plans/createPlan";
 import { usePrimaryCase } from "@/features/plans/api";
+import { confirmComparison } from "@/features/progress/api";
+import { comparisonPresentation, type ComparisonStatus } from "@/features/progress/compare";
 import type { AiUsageEvent, AllowanceSummary, LawnCase, LawnScan, ScanEntitlement, ScanPurpose } from "@/types/database";
 import {
     Camera,
@@ -94,9 +96,26 @@ export function scanImageSource(scan: DisplayableLawnScan): string | null {
 }
 
 export function scanDiagnosisLabel(scan: LawnScan): string {
+    if (scan.comparison_status) {
+        return comparisonPresentation(scan.comparison_status).label;
+    }
+    if (isFollowUpComparison(scan.diagnosis)) {
+        return comparisonPresentation(scan.diagnosis.status).label;
+    }
     return isDiagnosisV2(scan.diagnosis)
         ? scan.diagnosis.likely_cause
         : scan.diagnosis.condition_label || "Previous lawn scan";
+}
+
+export function findPendingComparison(scans: readonly LawnScan[]): { scanId: string; caseId: string; proposal: FollowUpComparison } | null {
+    const scan = scans.find((item) =>
+        item.purpose === "follow_up"
+        && item.comparison_status === null
+        && Boolean(item.case_id)
+        && isFollowUpComparison(item.diagnosis),
+    );
+    if (!scan || !scan.case_id || !isFollowUpComparison(scan.diagnosis)) return null;
+    return { scanId: scan.id, caseId: scan.case_id, proposal: scan.diagnosis };
 }
 
 function resetLabel(value: string | null): string | null {
@@ -194,9 +213,22 @@ function ScoreRing({ score }: { score: number }) {
     );
 }
 
-type DisplayDiagnosis = Diagnosis | DiagnosisV2;
+type DisplayDiagnosis = Diagnosis | DiagnosisV2 | FollowUpComparison;
 
 function DiagnosisResult({ diagnosis, imageUrl }: { diagnosis: DisplayDiagnosis; imageUrl: string }) {
+    if (isFollowUpComparison(diagnosis)) {
+        const presentation = comparisonPresentation(diagnosis.status);
+        return (
+            <div className="card space-y-3 p-5 animate-slide-up">
+                <p className="text-xs font-bold uppercase tracking-wide text-lawn-green-700">Proposed comparison</p>
+                <h3 className="text-xl font-bold text-gray-950">{presentation.label}</h3>
+                <p className="text-sm text-gray-700">{diagnosis.summary}</p>
+                <ul className="space-y-1 text-sm text-gray-600">
+                    {diagnosis.evidence.map((item) => <li key={item}>• {item}</li>)}
+                </ul>
+            </div>
+        );
+    }
     if (isDiagnosisV2(diagnosis)) {
         return (
             <div className="space-y-4 animate-slide-up">
@@ -339,7 +371,7 @@ export function ScanHistoryItem({ scan, onDelete }: { scan: DisplayableLawnScan;
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
-                    {!isDiagnosisV2(diagnosis) && <ScoreRing score={diagnosis.condition_score} />}
+                    {!isDiagnosisV2(diagnosis) && !isFollowUpComparison(diagnosis) && <ScoreRing score={diagnosis.condition_score} />}
                     {expanded ? (
                         <ChevronUp size={16} className="text-gray-400" />
                     ) : (
@@ -380,6 +412,49 @@ function base64ToBlob(base64: string, mimeType: string): Blob {
     return new Blob([byteArray], { type: mimeType });
 }
 
+async function blobToBase64(blob: Blob): Promise<string> {
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    let binary = "";
+    for (const byte of bytes) binary += String.fromCharCode(byte);
+    return btoa(binary);
+}
+
+export function ComparisonConfirmation({
+    proposal,
+    onConfirm,
+    busy = false,
+}: {
+    proposal: FollowUpComparison;
+    onConfirm: (status: ComparisonStatus) => void;
+    busy?: boolean;
+}) {
+    const [selected, setSelected] = useState<ComparisonStatus>(proposal.status);
+    const options: ComparisonStatus[] = ["improving", "unchanged", "worsening", "resolved", "unable_to_determine"];
+    return (
+        <section className="card p-5" aria-labelledby="confirm-comparison-title">
+            <p className="text-xs font-bold uppercase tracking-wide text-lawn-green-700">Your confirmation</p>
+            <h2 id="confirm-comparison-title" className="mt-1 text-lg font-bold text-gray-950">Does this match what you see?</h2>
+            <p className="mt-2 text-sm text-gray-600">The comparison is a proposal. Your plan will not change until you confirm an outcome.</p>
+            <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {options.map((status) => (
+                    <button
+                        key={status}
+                        type="button"
+                        aria-pressed={selected === status}
+                        className={`min-h-11 rounded-xl border px-3 text-left text-sm font-semibold ${selected === status ? "border-lawn-green-600 bg-lawn-green-50 text-lawn-green-800" : "border-gray-200 bg-white text-gray-700"}`}
+                        onClick={() => setSelected(status)}
+                    >
+                        {comparisonPresentation(status).label}
+                    </button>
+                ))}
+            </div>
+            <button type="button" disabled={busy} className="btn-primary mt-4 flex min-h-12 w-full items-center justify-center" onClick={() => onConfirm(selected)}>
+                Confirm outcome
+            </button>
+        </section>
+    );
+}
+
 export function ScanPage() {
     const { user } = useAuth();
     const grassType = useGrassType();
@@ -391,6 +466,8 @@ export function ScanPage() {
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
     const [currentDiagnosis, setCurrentDiagnosis] = useState<DisplayDiagnosis | null>(null);
     const [currentImageUrl, setCurrentImageUrl] = useState<string>("");
+    const [pendingComparison, setPendingComparison] = useState<{ scanId: string; caseId: string; proposal: FollowUpComparison } | null>(null);
+    const [isConfirming, setIsConfirming] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const requestIdRef = useRef<string | null>(null);
@@ -461,6 +538,7 @@ export function ScanPage() {
         },
         onSuccess: () => queryClient.invalidateQueries({ queryKey: ["lawn-scans"] }),
     });
+    const awaitingComparison = pendingComparison ?? findPendingComparison(scans);
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -489,11 +567,37 @@ export function ScanPage() {
             // 2. Call Gemini Vision before uploading so failed analysis does not orphan storage files
             const requestId = stableScanRequestId(requestIdRef.current);
             requestIdRef.current = requestId;
+            let referenceImageBase64: string | undefined;
+            let referenceMimeType: "image/jpeg" | "image/png" | undefined;
+            if (intent.purpose === "follow_up") {
+                const { data: originalScan, error: originalError } = await supabase
+                    .from("lawn_scans")
+                    .select("storage_path")
+                    .eq("user_id", user.id)
+                    .eq("case_id", intent.caseId!)
+                    .eq("purpose", "initial")
+                    .order("created_at", { ascending: true })
+                    .limit(1)
+                    .maybeSingle();
+                if (originalError) throw originalError;
+                if (!originalScan?.storage_path) {
+                    throw new Error("The original private scan is unavailable, so a progress comparison cannot be made yet.");
+                }
+                const { data: originalBlob, error: downloadError } = await supabase.storage
+                    .from("lawn-scans")
+                    .download(originalScan.storage_path);
+                if (downloadError || !originalBlob) throw downloadError ?? new Error("Original scan download failed.");
+                referenceImageBase64 = await blobToBase64(originalBlob);
+                referenceMimeType = originalBlob.type === "image/png" ? "image/png" : "image/jpeg";
+            }
+
             const result = await diagnoseLawn({
                 mode: intent.mode,
                 requestId,
                 imageBase64: base64,
                 mimeType,
+                referenceImageBase64,
+                referenceMimeType,
                 context: {
                     symptom: "not_sure",
                     grass_type: grassType,
@@ -501,9 +605,6 @@ export function ScanPage() {
                     original_diagnosis_summary: primaryCaseQuery.data?.diagnosis.summary,
                 },
             });
-            if (!isDiagnosisV2(result.diagnosis)) {
-                throw new Error("The lawn analysis returned an unexpected result.");
-            }
             const diagnosis = result.diagnosis;
             const retakeGuidance = getRetakeGuidance(diagnosis);
             if (retakeGuidance) {
@@ -520,6 +621,9 @@ export function ScanPage() {
             const blob = base64ToBlob(base64, mimeType);
 
             if (intent.purpose === "initial") {
+                if (!isDiagnosisV2(diagnosis)) {
+                    throw new Error("The lawn analysis returned an unexpected result.");
+                }
                 await createObservationFromDiagnosis(user.id, diagnosis, blob, { grassType });
                 savedScan = true;
                 setCurrentDiagnosis(diagnosis);
@@ -532,6 +636,10 @@ export function ScanPage() {
                 requestIdRef.current = null;
                 if (fileInputRef.current) fileInputRef.current.value = "";
                 return;
+            }
+
+            if (!isFollowUpComparison(diagnosis) || !intent.caseId) {
+                throw new Error("The progress comparison returned an unexpected result.");
             }
 
             // 4. Upload to private Supabase Storage
@@ -556,21 +664,29 @@ export function ScanPage() {
             if (signedUrlError) throw new Error(`Image preview failed: ${signedUrlError.message}`);
 
             // 6. Save to lawn_scans table with storage path; image_url remains populated for legacy compatibility
-            const { error: insertError } = await supabase.from("lawn_scans").insert({
-                user_id: user.id,
-                image_url: filePath,
-                storage_path: filePath,
-                diagnosis,
-                case_id: intent.caseId,
-                purpose: intent.purpose,
-                diagnosis_schema_version: 2,
-            });
+            const { data: insertedScan, error: insertError } = await supabase
+                .from("lawn_scans")
+                .insert({
+                    user_id: user.id,
+                    image_url: filePath,
+                    storage_path: filePath,
+                    diagnosis,
+                    case_id: intent.caseId,
+                    purpose: intent.purpose,
+                    diagnosis_schema_version: 1,
+                    comparison_proposal_status: diagnosis.status,
+                    comparison_proposal_summary: diagnosis.summary,
+                    comparison_evidence: diagnosis.evidence,
+                })
+                .select("id")
+                .single();
             if (insertError) throw new Error(`Save failed: ${insertError.message}`);
             savedScan = true;
 
             // 7. Show result
             setCurrentDiagnosis(diagnosis);
             setCurrentImageUrl(signedUrlData.signedUrl);
+            setPendingComparison({ scanId: insertedScan.id, caseId: intent.caseId, proposal: diagnosis });
             queryClient.invalidateQueries({ queryKey: ["lawn-scans"] });
             queryClient.invalidateQueries({ queryKey: ["scan-allowance"] });
 
@@ -735,6 +851,30 @@ export function ScanPage() {
                         <p className="section-title px-1">Latest Result</p>
                         <DiagnosisResult diagnosis={currentDiagnosis} imageUrl={currentImageUrl} />
                     </div>
+                )}
+
+                {awaitingComparison && (
+                    <ComparisonConfirmation
+                        proposal={awaitingComparison.proposal}
+                        busy={isConfirming}
+                        onConfirm={async (status) => {
+                            setIsConfirming(true);
+                            setError(null);
+                            try {
+                                await confirmComparison(awaitingComparison.caseId, awaitingComparison.scanId, status);
+                                setPendingComparison(null);
+                                await Promise.all([
+                                    queryClient.invalidateQueries({ queryKey: ["lawn-cases"] }),
+                                    queryClient.invalidateQueries({ queryKey: ["lawn-scans"] }),
+                                    queryClient.invalidateQueries({ queryKey: ["primary-plan"] }),
+                                ]);
+                            } catch (confirmationError) {
+                                setError(confirmationError instanceof Error ? confirmationError.message : "The outcome could not be confirmed.");
+                            } finally {
+                                setIsConfirming(false);
+                            }
+                        }}
+                    />
                 )}
 
             </div>

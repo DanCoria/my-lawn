@@ -12,6 +12,8 @@ export interface DiagnoseRequest {
     request_id: string;
     image: string;
     mime_type: "image/jpeg" | "image/png";
+    reference_image?: string;
+    reference_mime_type?: "image/jpeg" | "image/png";
     context: Record<string, unknown>;
 }
 
@@ -70,7 +72,7 @@ export interface DiagnoseHandlerDependencies {
 
 const MAX_IMAGE_BYTES = 3 * 1024 * 1024;
 const MAX_ENCODED_IMAGE_CHARS = 4 * 1024 * 1024;
-const MAX_REQUEST_BYTES = MAX_ENCODED_IMAGE_CHARS + 16 * 1024;
+const MAX_REQUEST_BYTES = MAX_ENCODED_IMAGE_CHARS * 2 + 24 * 1024;
 const MAX_IMAGE_DIMENSION = 1600;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -143,9 +145,23 @@ function parseRequest(value: unknown): DiagnoseRequest | null {
     if (typeof value.request_id !== "string" || !UUID_PATTERN.test(value.request_id)) return null;
     if (typeof value.image !== "string" || value.image.length === 0) return null;
     if (value.mime_type !== "image/jpeg" && value.mime_type !== "image/png") return null;
+    const hasReference = typeof value.reference_image === "string" && value.reference_image.length > 0;
+    const hasReferenceMime = value.reference_mime_type === "image/jpeg" || value.reference_mime_type === "image/png";
+    if (value.mode === "follow_up" && (!hasReference || !hasReferenceMime)) return null;
+    if (value.mode !== "follow_up" && (value.reference_image !== undefined || value.reference_mime_type !== undefined)) return null;
     const context = sanitizeContext(value.mode, value.context);
     if (!context) return null;
-    return { ...value, mode: value.mode, request_id: value.request_id, image: value.image, mime_type: value.mime_type, context };
+    return {
+        mode: value.mode,
+        request_id: value.request_id,
+        image: value.image,
+        mime_type: value.mime_type,
+        ...(hasReference && hasReferenceMime ? {
+            reference_image: value.reference_image as string,
+            reference_mime_type: value.reference_mime_type as "image/jpeg" | "image/png",
+        } : {}),
+        context,
+    };
 }
 
 async function readJsonBody(request: Request): Promise<{ value?: unknown; error?: "too_large" | "invalid" }> {
@@ -224,6 +240,14 @@ function reservationStatus(reason: string): number {
     return 429;
 }
 
+function validImage(value: string, mimeType: "image/jpeg" | "image/png"): boolean {
+    if (value.length > MAX_ENCODED_IMAGE_CHARS) return false;
+    const bytes = decodeBase64(value);
+    if (!bytes || bytes.byteLength > MAX_IMAGE_BYTES) return false;
+    const dimensions = mimeType === "image/png" ? pngDimensions(bytes) : jpegDimensions(bytes);
+    return Boolean(dimensions && Math.max(dimensions.width, dimensions.height) <= MAX_IMAGE_DIMENSION);
+}
+
 function isTimeout(error: unknown): boolean {
     if (error instanceof DOMException && error.name === "TimeoutError") return true;
     return error instanceof Error
@@ -269,12 +293,11 @@ export function createDiagnoseHandler(deps: DiagnoseHandlerDependencies) {
             networkHash = await deps.hashNetworkAddress(address);
         }
 
-        if (input.image.length > MAX_ENCODED_IMAGE_CHARS) return response(origin, 400, { error: "invalid_image" });
-        const bytes = decodeBase64(input.image);
-        if (!bytes || bytes.byteLength > MAX_IMAGE_BYTES) return response(origin, 400, { error: "invalid_image" });
-        const dimensions = input.mime_type === "image/png" ? pngDimensions(bytes) : jpegDimensions(bytes);
-        if (!dimensions || Math.max(dimensions.width, dimensions.height) > MAX_IMAGE_DIMENSION) {
+        if (!validImage(input.image, input.mime_type)) {
             return response(origin, 400, { error: "invalid_image_dimensions" });
+        }
+        if (input.mode === "follow_up" && (!input.reference_image || !input.reference_mime_type || !validImage(input.reference_image, input.reference_mime_type))) {
+            return response(origin, 400, { error: "invalid_reference_image" });
         }
 
         let runtime: RuntimeState;
@@ -295,7 +318,7 @@ export function createDiagnoseHandler(deps: DiagnoseHandlerDependencies) {
         } catch {
             return response(origin, 503, { error: "temporarily_unavailable" });
         }
-        if (!reservation.allowed) {
+        if (reservation.allowed === false) {
             return response(origin, reservationStatus(reservation.reason), {
                 error: reservation.reason,
                 ...(reservation.resetAt ? { reset_at: reservation.resetAt } : {}),
@@ -335,6 +358,8 @@ export function createDiagnoseHandler(deps: DiagnoseHandlerDependencies) {
                 route: input.mode,
                 imageBase64: input.image,
                 mimeType: input.mime_type,
+                referenceImageBase64: input.reference_image,
+                referenceMimeType: input.reference_mime_type,
                 context: input.context,
             });
         } catch (error) {

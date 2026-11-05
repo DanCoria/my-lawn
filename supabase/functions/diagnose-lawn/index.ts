@@ -71,6 +71,9 @@ const geminiTransport = (apiKey: string): GeminiTransport => async (request) => 
                     role: "user",
                     parts: [
                         { text: request.prompt },
+                        ...(request.referenceImageBase64 && request.referenceMimeType
+                            ? [{ inlineData: { mimeType: request.referenceMimeType, data: request.referenceImageBase64 } }]
+                            : []),
                         { inlineData: { mimeType: request.mimeType, data: request.imageBase64 } },
                     ],
                 }],

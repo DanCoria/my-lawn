@@ -4,6 +4,8 @@ export type {
     DiagnosisConfidence,
     DiagnosisEvidence,
     DiagnosisV2,
+    FollowUpComparison,
+    FollowUpStatus,
     GuestDiagnosisPreview,
     ImageQuality,
     PlanSeed,
@@ -14,6 +16,7 @@ export type {
 export {
     isAiUsageSummary,
     isDiagnosisV2,
+    isFollowUpComparison,
     isGuestDiagnosisPreview,
     isUsableDiagnosis,
 } from "../../../shared/diagnosis-contract.ts";

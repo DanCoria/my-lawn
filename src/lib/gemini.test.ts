@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import type { DiagnosisV2 } from "@shared/diagnosis-contract";
+import type { DiagnosisV2, FollowUpComparison } from "@shared/diagnosis-contract";
 
 const auth = vi.hoisted(() => ({
     getSession: vi.fn(),
@@ -49,6 +49,11 @@ const diagnosis: DiagnosisV2 = {
             check_options: [{ value: "dry", label: "Dry" }],
         }],
     },
+};
+
+const comparison: FollowUpComparison = {
+    schema_version: "follow-up-1", image_quality: { usable: true }, status: "improving",
+    summary: "Coverage is denser.", evidence: ["Less exposed soil"],
 };
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -108,6 +113,25 @@ describe("browser diagnosis API", () => {
 
         expect(fetchMock.mock.calls.map(([, init]) => JSON.parse(String(init?.body)).request_id))
             .toEqual([request.requestId, request.requestId]);
+    });
+
+    test("sends_only_the_bounded_original_and_follow_up_images_for_comparison", async () => {
+        const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({
+            diagnosis: comparison, allowance: { source: "monthly" }, usage_event_id: "event-2",
+        }));
+        await diagnoseLawn({
+            ...request,
+            mode: "follow_up",
+            referenceImageBase64: "original-image",
+            referenceMimeType: "image/jpeg",
+            context: { original_diagnosis_summary: "Heat stress", elapsed_days: 14 },
+        });
+        const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
+        expect(body).toMatchObject({
+            mode: "follow_up", image: "encoded-image", reference_image: "original-image",
+            reference_mime_type: "image/jpeg",
+        });
+        expect(Object.keys(body.context)).toEqual(["original_diagnosis_summary", "elapsed_days"]);
     });
 
     test.each([

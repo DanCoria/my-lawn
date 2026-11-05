@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
 import type { AiUsageEvent, LawnCase, LawnScan, ScanEntitlement } from "@/types/database";
-import { ScanExperience, deriveAllowanceSummary, getScanIntent, scanDiagnosisLabel, scanImageSource, stableScanRequestId } from "./ScanPage";
+import { ComparisonConfirmation, ScanExperience, deriveAllowanceSummary, findPendingComparison, getScanIntent, scanDiagnosisLabel, scanImageSource, stableScanRequestId } from "./ScanPage";
 
 afterEach(cleanup);
 
@@ -71,6 +71,18 @@ describe("scan allowance and intent", () => {
         expect(scanImageSource({ ...legacy, signed_image_url: "signed-private.jpg" })).toBe("signed-private.jpg");
         expect(scanDiagnosisLabel(legacy)).toBe("Thin turf");
     });
+
+    test("restores an unconfirmed proposal after reload and displays a user correction", () => {
+        const followUp = {
+            id: "scan-2", case_id: "case-1", purpose: "follow_up", comparison_status: null,
+            diagnosis: {
+                schema_version: "follow-up-1", image_quality: { usable: true }, status: "improving",
+                summary: "Coverage is denser.", evidence: ["Less soil"],
+            },
+        } as LawnScan;
+        expect(findPendingComparison([followUp])).toMatchObject({ scanId: "scan-2", caseId: "case-1" });
+        expect(scanDiagnosisLabel({ ...followUp, comparison_status: "worsening" })).toBe("Getting worse");
+    });
 });
 
 describe("ScanExperience", () => {
@@ -86,5 +98,20 @@ describe("ScanExperience", () => {
         expect(screen.getByText(/compare progress on heat stress/i)).toBeTruthy();
         expect(screen.getByText(/already being analyzed/i)).toBeTruthy();
         expect(screen.getByRole("button", { name: /choose a photo/i }).hasAttribute("disabled")).toBe(true);
+    });
+});
+
+describe("ComparisonConfirmation", () => {
+    test("does not mutate anything until the user confirms and allows correction", () => {
+        const onConfirm = vi.fn();
+        render(<ComparisonConfirmation proposal={{
+            schema_version: "follow-up-1", image_quality: { usable: true }, status: "improving",
+            summary: "Coverage is denser.", evidence: ["Less exposed soil"],
+        }} onConfirm={onConfirm} />);
+        expect(onConfirm).not.toHaveBeenCalled();
+        fireEvent.click(screen.getByRole("button", { name: "Getting worse" }));
+        expect(onConfirm).not.toHaveBeenCalled();
+        fireEvent.click(screen.getByRole("button", { name: /confirm outcome/i }));
+        expect(onConfirm).toHaveBeenCalledWith("worsening");
     });
 });

@@ -19,6 +19,14 @@ const guestDiagnosis = {
     safe_next_step: "Check soil moisture two inches down.",
 } as const;
 
+const followUpComparison = {
+    schema_version: "follow-up-1",
+    image_quality: { usable: true },
+    status: "improving",
+    summary: "The area has denser green coverage.",
+    evidence: ["Less exposed soil"],
+} as const;
+
 function forgedPngBase64(width = 800, height = 600, totalBytes = 33): string {
     const bytes = new Uint8Array(totalBytes);
     bytes.set([137, 80, 78, 71, 13, 10, 26, 10]);
@@ -125,6 +133,40 @@ function createDeps(
 }
 
 describe("diagnose-lawn handler", () => {
+    test("follow_up_requires_and_forwards_one_valid_original_image", async () => {
+        const deps = createDeps({
+            authenticate: async () => ({ userId: "user-1", isAnonymous: false }),
+            provider: {
+                analyze: async (request) => {
+                    expect(request).toMatchObject({
+                        route: "follow_up",
+                        referenceImageBase64: expect.any(String),
+                        referenceMimeType: "image/png",
+                    });
+                    return {
+                        route: "follow_up",
+                        diagnosis: followUpComparison,
+                        usage: { model: "gemini-flash", input_tokens: 100, output_tokens: 40, thought_tokens: 0, total_tokens: 140, metadata_complete: true },
+                    };
+                },
+            },
+        });
+        const missing = await createDiagnoseHandler(deps)(jsonRequest({
+            mode: "follow_up", context: { original_diagnosis_summary: "Heat stress" },
+        }));
+        expect(missing.status).toBe(400);
+        expect(deps.calls.reserve).toHaveLength(0);
+
+        const response = await createDiagnoseHandler(deps)(jsonRequest({
+            mode: "follow_up",
+            context: { original_diagnosis_summary: "Heat stress" },
+            reference_image: pngBase64(),
+            reference_mime_type: "image/png",
+        }));
+        expect(response.status).toBe(200);
+        await expect(response.json()).resolves.toMatchObject({ diagnosis: followUpComparison });
+    });
+
     test("rejects_invalid_jwt_before_reservation", async () => {
         const deps = createDeps({ authenticate: async () => null });
         const response = await createDiagnoseHandler(deps)(jsonRequest());
