@@ -7,7 +7,7 @@ import { AppShell } from "@/components/AppShell";
 import { LoginPage } from "@/pages/LoginPage";
 import { OnboardingPage } from "@/pages/OnboardingPage";
 import { TodayPage } from "@/pages/TodayPage";
-import { ActivityLogPage } from "@/pages/ActivityLogPage";
+import { ProgressPage } from "@/pages/ProgressPage";
 import { PlanPage } from "@/pages/PlanPage";
 import { ScanPage } from "@/pages/ScanPage";
 import { ProfilePage } from "@/pages/ProfilePage";
@@ -55,10 +55,10 @@ export default function App() {
                                 <Route index element={<TodayPage />} />
                                 <Route path="plan" element={<PlanPage />} />
                                 <Route path="scan" element={<ScanPage />} />
-                                <Route path="progress" element={<ActivityLogPage />} />
+                                <Route path="progress" element={<ProgressPage />} />
                                 <Route path="profile" element={<ProfilePage />} />
                             </Route>
-                            <Route path="/log" element={<Navigate to="/progress" replace />} />
+                            <Route path="/log" element={<Navigate to="/progress#activity" replace />} />
                             <Route path="/schedule" element={<Navigate to="/plan#seasonal" replace />} />
                             <Route path="*" element={<Navigate to="/" replace />} />
                         </Routes>

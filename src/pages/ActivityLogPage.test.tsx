@@ -12,7 +12,7 @@ const fullActivity: Activity = {
     user_id: "user-1",
     type: "mow",
     date: "2026-09-20",
-    notes: null,
+    notes: "Manual mow — backyard notes",
     created_at: "2026-09-20T12:00:00.000Z",
 };
 
@@ -101,7 +101,14 @@ vi.mock("@/lib/weather", () => ({
     }),
 }));
 
-import { DashboardPage } from "@/pages/DashboardPage";
+vi.mock("@/features/plans/api", () => ({
+    usePrimaryCase: () => ({ data: null, isLoading: false }),
+    usePlanSteps: () => ({ data: [], isLoading: false }),
+    useCompletePlanStep: () => ({ mutate: vi.fn(), isPending: false }),
+    usePostponePlanStep: () => ({ mutate: vi.fn(), isPending: false }),
+}));
+
+import { TodayPage } from "@/pages/TodayPage";
 import { ActivityLogPage } from "@/pages/ActivityLogPage";
 
 afterEach(() => {
@@ -121,24 +128,26 @@ function renderPage(page: React.ReactNode, queryClient: QueryClient) {
 }
 
 describe("activity query cache", () => {
-    it("keeps activity ids when navigating from the dashboard to the activity log", async () => {
+    it("keeps complete activity ids, notes, and deletion controls when navigating from Today to Progress", async () => {
         const queryClient = new QueryClient({
             defaultOptions: { queries: { staleTime: Infinity, retry: false } },
         });
 
-        const dashboard = renderPage(<DashboardPage />, queryClient);
+        const dashboard = renderPage(<TodayPage />, queryClient);
 
         await waitFor(() => {
             expect(queryClient.getQueryData(["activities", "user-1"])).toBeDefined();
         });
         dashboard.unmount();
 
-        const activityLog = renderPage(<ActivityLogPage />, queryClient);
+        const activityLog = renderPage(<ActivityLogPage embedded />, queryClient);
 
         await waitFor(() => {
             expect(activityLog.container.querySelector('[id^="delete-activity-"]')).not.toBeNull();
         });
         const deleteButton = activityLog.container.querySelector('[id^="delete-activity-"]');
         expect(deleteButton?.getAttribute("id")).toBe("delete-activity-activity-1");
+        expect(activityLog.getByText("Manual mow — backyard notes")).toBeTruthy();
+        expect(activityLog.getByPlaceholderText(/mowed at 3 inches/i)).toBeTruthy();
     });
 });

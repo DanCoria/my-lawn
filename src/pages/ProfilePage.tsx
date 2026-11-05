@@ -1,10 +1,13 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLawnProfile } from "@/contexts/LawnProfileContext";
 import { GRASS_TYPES, getGrassTypeInfo } from "@/lib/lawnLogic";
+import { supabase } from "@/lib/supabase";
 import { BottomNav } from "@/components/BottomNav";
-import type { GrassType } from "@/types/database";
+import { deriveAllowanceSummary } from "./ScanPage";
+import type { AiUsageEvent, AllowanceSummary, GrassType, ScanEntitlement } from "@/types/database";
 import type { GeocodingResult } from "@/types/geocoding";
 import {
     User,
@@ -18,13 +21,58 @@ import {
     ArrowLeft,
     MapPin,
     Search,
+    ScanLine,
 } from "lucide-react";
+
+export function ProfileAllowanceCard({ allowance }: { allowance: AllowanceSummary | null }) {
+    const available = allowance?.remaining ?? 0;
+    const resetLabel = allowance?.reset_at
+        ? new Date(allowance.reset_at).toLocaleDateString("en-US", { month: "long", day: "numeric" })
+        : null;
+
+    return (
+        <div className="card p-4 flex items-start gap-3">
+            <div className="w-11 h-11 rounded-2xl bg-lawn-green-50 flex items-center justify-center flex-shrink-0">
+                <ScanLine size={21} className="text-lawn-green-700" />
+            </div>
+            <div className="min-w-0">
+                <p className="font-bold text-gray-900">
+                    {available} {available === 1 ? "scan" : "scans"} available
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                    {allowance?.source === "monthly" ? "Monthly scan allowance" : "Welcome scan allowance"}
+                    {resetLabel ? ` · Resets ${resetLabel}` : ""}
+                </p>
+                {allowance?.in_flight && (
+                    <p className="text-xs text-amber-700 mt-2">A scan is being processed and may affect this balance.</p>
+                )}
+            </div>
+        </div>
+    );
+}
 
 export function ProfilePage() {
     const navigate = useNavigate();
     const { user, signOut } = useAuth();
     const { profile, grassType, updateGrassType, updateLocation } = useLawnProfile();
     const grassInfo = getGrassTypeInfo(grassType);
+    const { data: allowance = null } = useQuery({
+        queryKey: ["scan-allowance", user?.id],
+        queryFn: async () => {
+            const [entitlementResult, usageResult] = await Promise.all([
+                supabase.from("scan_entitlements").select("*").eq("user_id", user!.id).maybeSingle(),
+                supabase.from("ai_usage_events").select("*").eq("user_id", user!.id).order("created_at", { ascending: false }),
+            ]);
+            if (entitlementResult.error) throw entitlementResult.error;
+            if (usageResult.error) throw usageResult.error;
+            return deriveAllowanceSummary(
+                entitlementResult.data as ScanEntitlement | null,
+                (usageResult.data ?? []) as AiUsageEvent[],
+            );
+        },
+        enabled: !!user,
+        refetchInterval: (query) => query.state.data?.in_flight ? 5000 : false,
+    });
 
     const [editingGrass, setEditingGrass] = useState(false);
     const [pendingGrass, setPendingGrass] = useState<GrassType>(grassType);
@@ -564,6 +612,11 @@ export function ProfilePage() {
                             </p>
                         </div>
                     )}
+                </div>
+
+                <div>
+                    <p className="section-title px-1">Scan Allowance</p>
+                    <ProfileAllowanceCard allowance={allowance} />
                 </div>
 
                 {/* Sign Out */}

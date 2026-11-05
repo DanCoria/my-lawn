@@ -32,7 +32,7 @@ const ACTIVITY_CONFIG: Record<
     aerate: { icon: CircleDot, color: "text-purple-700", bg: "bg-purple-50", dot: "bg-purple-500" },
 };
 
-export function ActivityLogPage() {
+export function ActivityLogPage({ embedded = false }: { embedded?: boolean }) {
     const { user } = useAuth();
     const { grassType } = useLawnProfile();
     const grassInfo = getGrassTypeInfo(grassType);
@@ -122,16 +122,16 @@ export function ActivityLogPage() {
     };
 
     return (
-        <div className="min-h-screen bg-gray-50">
+        <div className={embedded ? "" : "min-h-screen bg-gray-50"}>
             {/* Header */}
-            <div className="bg-lawn-green-700 px-5 pt-12 pb-5">
+            {!embedded && <div className="bg-lawn-green-700 px-5 pt-12 pb-5">
                 <h1 className="text-white text-2xl font-bold">Activity Log</h1>
                 <p className="text-lawn-green-200 text-sm mt-0.5">
                     {grassInfo.emoji} {grassInfo.name} lawn activity tracker
                 </p>
-            </div>
+            </div>}
 
-            <div className="px-4 py-5 space-y-5 page-content">
+            <div className={embedded ? "space-y-5" : "px-4 py-5 space-y-5 page-content"}>
                 {/* Log Entry Form */}
                 <div className="card overflow-hidden">
                     <button
@@ -193,7 +193,7 @@ export function ActivityLogPage() {
                                     id="activity-notes"
                                     value={notes}
                                     onChange={(e) => setNotes(e.target.value)}
-                                    placeholder="e.g. Applied 0.5 lb N/1000 sq ft Scott's Turf Builder..."
+                                    placeholder="e.g. Mowed at 3 inches or watered the front lawn..."
                                     rows={3}
                                     className="input-field resize-none"
                                 />
@@ -379,7 +379,7 @@ export function ActivityLogPage() {
                 </div>
             </div>
 
-            <BottomNav />
+            {!embedded && <BottomNav />}
         </div>
     );
 }
