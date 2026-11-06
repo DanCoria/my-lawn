@@ -34,6 +34,21 @@ Configure these as Supabase Edge Function secrets, not browser/Vercel public var
 
 The code fixes Guest Preview output at 700 tokens, personalized/follow-up output at 1,500 tokens, and thinking at zero. Gemini rate limits are project-wide rather than key-wide, so additional keys do not create an independent safety boundary: [Gemini rate limits](https://ai.google.dev/gemini-api/docs/rate-limits).
 
+### Model and price review — 2026-11-06
+
+The checked-in defaults remain `gemini-2.5-flash-lite` for Guest Preview and `gemini-2.5-flash` for personalized/follow-up diagnosis. Official paid-tier standard pricing currently lists:
+
+| Model | Input / 1M text, image, or video tokens | Output / 1M tokens | Maximum configured output cost per call |
+| --- | ---: | ---: | ---: |
+| `gemini-2.5-flash-lite` | $0.10 | $0.40 | $0.00028 at 700 tokens |
+| `gemini-2.5-flash` | $0.30 | $2.50 | $0.00375 at 1,500 tokens |
+
+Input/image tokens are additional, so these are output-only ceilings rather than total-call estimates. The application records actual input, output, thought, and total token counts for reconciliation. See [official Gemini API pricing](https://ai.google.dev/gemini-api/docs/pricing).
+
+Google now states that access to the 2.5 models can be limited for new projects and recommends current stable models for new workloads. Do not silently replace the configured IDs: newer models have different pricing and thinking configuration, and lawn-diagnosis quality must be evaluated. Before enabling scans, confirm the dedicated project can call both configured IDs. If it cannot, keep `AI_SCANS_ENABLED=false`, select stable replacements from the [official model list](https://ai.google.dev/gemini-api/docs/models), update provider-contract tests/configuration, and run the controlled production scan gate again.
+
+Paid-tier requests are listed as not used to improve Google's products; free-tier requests are listed as used to improve them. Confirm the dedicated project is on the intended billing/data-use tier before sending user lawn photos.
+
 Set or change secrets with the project-scoped Supabase CLI, for example:
 
 ```powershell
@@ -116,5 +131,7 @@ Once anonymous auth is enabled, run a scheduled server-side cleanup using the Su
 - [ ] Global/guest/network limits and circuit state match the values in this runbook.
 - [ ] Browser roles cannot execute service-only RPCs or read the `private` schema.
 - [ ] Public Guest Preview remains disabled; anonymous Auth and Turnstile are not enabled in Phase 0.
+- [ ] The dedicated project successfully called each configured stable model ID after the 2026 model-access change, or reviewed replacements were deployed and re-tested.
+- [ ] The chosen billing tier's image/data-use behavior was reviewed and accepted.
 
 If any checkbox fails, leave `AI_SCANS_ENABLED=false` and do not expose public Guest Preview.
