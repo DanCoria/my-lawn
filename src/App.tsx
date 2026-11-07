@@ -33,7 +33,7 @@ export default function App() {
                 <LawnProfileProvider>
                     <BrowserRouter>
                         <Routes>
-                            <Route path="/login" element={<LoginPage />} />
+                            <Route path="/login" element={<LoginPage guestPreviewEnabled={guestPreviewEnabled} />} />
                             <Route path="/diagnose" element={guestPreviewEnabled ? <GuestScanPage /> : <Navigate to="/login" replace />} />
                             <Route path="/diagnose/convert" element={guestPreviewEnabled ? <ConvertAccountPage /> : <Navigate to="/login" replace />} />
                             <Route path="/auth/convert" element={guestPreviewEnabled ? <AuthConversionCallbackPage /> : <Navigate to="/login" replace />} />

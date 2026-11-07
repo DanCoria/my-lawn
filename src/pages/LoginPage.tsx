@@ -3,7 +3,11 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Loader2 } from "lucide-react";
 
-export function LoginPage() {
+interface LoginPageProps {
+    guestPreviewEnabled: boolean;
+}
+
+export function LoginPage({ guestPreviewEnabled }: LoginPageProps) {
     const { signIn, signUp } = useAuth();
     const navigate = useNavigate();
 
@@ -134,11 +138,13 @@ export function LoginPage() {
                             : "Already have an account? Sign in"}
                     </button>
                 </div>
-                <div className="mt-4 text-center">
-                    <Link to="/diagnose" className="text-sm text-gray-500 hover:text-lawn-green-700 hover:underline">
-                        Not ready for an account? Preview a lawn problem
-                    </Link>
-                </div>
+                {guestPreviewEnabled && (
+                    <div className="mt-4 text-center">
+                        <Link to="/diagnose" className="text-sm text-gray-500 hover:text-lawn-green-700 hover:underline">
+                            Not ready for an account? Preview a lawn problem
+                        </Link>
+                    </div>
+                )}
             </div>
         </div>
     );
